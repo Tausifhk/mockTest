@@ -1,0 +1,2894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#1e3a8a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Mock Test" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <title>MOCK TEST APP by TAUSIF - PDF to Online Mock Test</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: 'Inter', Arial, Helvetica, sans-serif;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #f4f5f7;
+      color: #1f2937;
+      overflow-x: hidden;
+    }
+
+    /* Authentic NTA CBT Status Shapes */
+    .nta-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+      transition: transform 0.1s ease, box-shadow 0.15s ease;
+      position: relative;
+    }
+    .nta-badge:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.18);
+    }
+    .nta-badge.active-question {
+      outline: 2.5px solid #1d4ed8;
+      outline-offset: 2px;
+      z-index: 5;
+    }
+
+    /* 0: Not Visited - White/Gray Rounded Square with Border */
+    .status-not-visited {
+      background: linear-gradient(180deg, #ffffff 0%, #e9ecef 100%);
+      color: #1f2937;
+      border: 1px solid #adb5bd;
+      border-radius: 3px;
+    }
+
+    /* 1: Not Answered - Orange/Red Pentagon Tag */
+    .status-not-answered {
+      background: linear-gradient(180deg, #ef4444 0%, #c83319 100%);
+      color: #ffffff;
+      border: 1px solid #b91c1c;
+      clip-path: polygon(0% 0%, 100% 0%, 100% 72%, 50% 100%, 0% 72%);
+      padding-bottom: 4px;
+    }
+
+    /* 2: Answered - Green Pentagon Tag (inverted top or shield) */
+    .status-answered {
+      background: linear-gradient(180deg, #4cae4c 0%, #2d862d 100%);
+      color: #ffffff;
+      border: 1px solid #256f25;
+      clip-path: polygon(0% 28%, 50% 0%, 100% 28%, 100% 100%, 0% 100%);
+      padding-top: 4px;
+    }
+
+    /* 3: Marked for Review - Purple Circle */
+    .status-review {
+      background: linear-gradient(180deg, #6f42c1 0%, #4a2387 100%);
+      color: #ffffff;
+      border: 1px solid #3b1c6e;
+      border-radius: 9999px;
+    }
+
+    /* 4: Answered & Marked for Review - Purple Circle with Green Check Dot */
+    .status-answered-review {
+      background: linear-gradient(180deg, #6f42c1 0%, #4a2387 100%);
+      color: #ffffff;
+      border: 1px solid #3b1c6e;
+      border-radius: 9999px;
+    }
+    .status-answered-review::after {
+      content: '✓';
+      position: absolute;
+      bottom: -2px;
+      right: -2px;
+      width: 14px;
+      height: 14px;
+      background-color: #22c55e;
+      color: #ffffff;
+      border: 1.5px solid #ffffff;
+      border-radius: 9999px;
+      font-size: 9px;
+      line-height: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+    }
+
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #b8c2cc;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #8795a1;
+    }
+
+    body { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    #questionImageWrap { align-items: flex-start; }
+    #questionImage { margin-left: auto; margin-right: auto; }
+
+    /* Mobile / tablet: question palette becomes a slide-in drawer */
+    #paletteBackdrop { display: none; }
+    @media (max-width: 1023px) {
+      #rightPalettePane {
+        position: fixed; top: 0; right: 0; bottom: 0;
+        width: 88%; max-width: 24rem; z-index: 45;
+        transform: translateX(100%); transition: transform .25s ease;
+        box-shadow: -8px 0 24px rgba(0,0,0,.25);
+        padding-bottom: env(safe-area-inset-bottom);
+      }
+      #rightPalettePane.open { transform: none; }
+      #paletteBackdrop.open { display: block; }
+    }
+
+    .pdf-canvas-wrapper {
+      background: #525659;
+      position: relative;
+      overflow: auto;
+    }
+    .pdf-canvas-wrapper.light-bg {
+      background: #f8fafc;
+    }
+  </style>
+</head>
+<body class="h-dvh flex flex-col select-none overflow-hidden">
+
+  <!-- 5-MINUTE WARNING TOP ALERT BAR (Only appears when <= 5 mins remain during live exam) -->
+  <div id="fiveMinWarningBanner" class="hidden bg-red-600 text-white px-4 py-1.5 text-xs font-bold items-center justify-between gap-2 shadow-md shrink-0 z-40">
+    <div class="flex items-center gap-2">
+      <span class="inline-block w-2.5 h-2.5 rounded-full bg-yellow-300 animate-ping"></span>
+      <span>⚠️ WARNING: Only 5 minutes remaining! Your test will automatically submit when the timer reaches 00:00:00.</span>
+    </div>
+    <button id="dismissFiveMinBannerBtn" type="button" class="text-white/90 hover:text-white px-2 py-0.5 rounded border border-white/40 text-[11px]">
+      Dismiss
+    </button>
+  </div>
+
+  <!-- TOP WHITE HEADER: App Name on Left & Examinee Details with Timer on Right -->
+  <header class="bg-white border-b border-gray-300 px-3 py-2 sm:px-6 sm:py-3 grid grid-cols-[minmax(0,1fr)_auto] lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 lg:gap-8 shrink-0 z-20">
+    <!-- Left Logo & App Name -->
+    <div class="flex items-center gap-3 justify-self-start">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-full flex items-center justify-center relative overflow-hidden shadow-sm border border-gray-200" style="background: linear-gradient(135deg, #f58220 0%, #f58220 48%, #ffffff 48%, #ffffff 52%, #138808 52%, #138808 100%);">
+          <svg class="w-5 h-5 text-white drop-shadow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </div>
+        <div>
+          <div class="text-[14px] min-[400px]:text-[16px] sm:text-[24px] font-extrabold tracking-tight text-[#1e3a8a] leading-tight sm:leading-none">
+            MOCK TEST APP by TAUSIF
+          </div>
+          <div class="hidden sm:inline-block bg-[#168aad] text-white text-[10px] font-semibold px-1.5 py-0.5 mt-0.5 rounded-sm tracking-wide">
+            Excellence in Assessment
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden state elements preserved for internal compatibility -->
+    <div class="hidden">
+      <span id="activePaperBadge">UGC-NET Paper-I Sample PDF (Built-in)</span>
+      <span id="pdfPageCountBadge">5 Pages</span>
+      <span id="examLiveBadge">SETUP MODE</span>
+      <h1 id="examHeaderTitle">PAPER NAME</h1>
+      <button id="loadSamplePaperBtn" type="button">SAMPLE PAPER</button>
+      <button id="openSettingsModalBtn" type="button">TEST SETTINGS</button>
+      <button id="openAnswerKeyModalBtn" type="button">ANSWER KEY</button>
+      <button id="openStartExamModalBtn" type="button">START EXAM</button>
+      <button id="toggleFullScreenBtn" type="button">⛶ FULLSCREEN</button>
+      <select id="paperLanguageSelect"><option value="English">English</option></select>
+      <button id="toggleTimerBtn" type="button">⏸</button>
+    </div>
+
+    <!-- Centered countdown timer -->
+    <div class="flex flex-col items-center justify-center leading-tight lg:col-start-2 lg:row-start-1">
+      <span class="text-[10px] sm:text-sm font-semibold text-gray-600">Remaining Time</span>
+      <div class="flex items-center gap-2">
+        <span id="timerDisplay" class="bg-[#0088cc] text-white font-bold px-3 py-1 sm:px-6 sm:py-2 rounded-full text-lg sm:text-2xl tracking-wider shadow-inner transition-colors">
+          01:30:00
+        </span>
+        <button id="pauseTestBtn" type="button" title="Pause the test" class="hidden items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-full shadow transition uppercase tracking-wide">
+          <span id="pauseBtnIcon">⏸</span><span id="pauseBtnText" class="hidden sm:inline">Pause</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Right Examinee Details Box (Matches NTA Screenshot) -->
+    <div class="hidden lg:flex items-center gap-3 border border-gray-300 bg-gray-50 px-4 py-2 rounded justify-self-center lg:justify-self-end lg:col-start-3 lg:row-start-1">
+      <div class="w-9 h-9 bg-gray-200 border border-gray-400 rounded flex items-center justify-center text-gray-600 shrink-0">
+        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
+        </svg>
+      </div>
+      <div class="text-[11px] sm:text-xs leading-tight space-y-0.5">
+        <div class="flex items-center gap-1.5">
+          <span class="text-gray-600 font-medium">Candidate Name</span>
+          <span id="displayCandidateName" class="text-[#d97706] font-bold">[Your Name]</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="text-gray-600 font-medium">Subject Name</span>
+          <span id="displaySubjectName" class="text-[#d97706] font-bold">[Mock Practice]</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================================================================== -->
+  <!-- VIEW 1: PRE-EXAM SETUP WIZARD (Constrained to fit 100% inside screen) -->
+  <!-- Sequence: Step 1 (Fetch PDF) -> Step 2 (Test Settings) -> Step 3 (Answer Key) -> Step 4 (Start Exam) -->
+  <!-- ===================================================================== -->
+  <main id="preExamWizardScreen" class="flex-1 min-h-0 overflow-hidden bg-slate-100 flex flex-col items-center justify-center p-2 sm:p-4">
+    <div class="w-full max-w-2xl max-h-full flex flex-col bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden">
+
+      <!-- Wizard Step Progress Header (Compact & Pinned at Top) -->
+      <div class="bg-[#1e3a8a] text-white px-4 py-2.5 sm:px-5 sm:py-3 shrink-0">
+        <div class="flex items-center justify-between mb-2">
+          <h2 id="wizardMainHeading" class="text-sm sm:text-base font-extrabold tracking-wide uppercase">
+            Step 1: Fetch Question Paper PDF
+          </h2>
+          <span id="wizardStepBadge" class="bg-[#f37e20] text-white text-[11px] font-bold px-2 py-0.5 rounded">
+            Step 1 of 4
+          </span>
+        </div>
+
+        <!-- 4-Step Progress Bar -->
+        <div class="grid grid-cols-4 gap-1.5 text-[10px] sm:text-[11px] font-semibold">
+          <div id="stepIndicator1" class="bg-white text-[#1e3a8a] px-2 py-1 rounded text-center truncate shadow-2xs">
+            1. Question PDF
+          </div>
+          <div id="stepIndicator2" class="bg-white/15 text-white/80 px-2 py-1 rounded text-center truncate">
+            2. Test Settings
+          </div>
+          <div id="stepIndicator3" class="bg-white/15 text-white/80 px-2 py-1 rounded text-center truncate">
+            3. Answer Key
+          </div>
+          <div id="stepIndicator4" class="bg-white/15 text-white/80 px-2 py-1 rounded text-center truncate">
+            4. Start Exam
+          </div>
+        </div>
+      </div>
+
+      <div id="settingsModal" class="hidden">
+        <button id="closeSettingsModalBtn" type="button">&times;</button>
+      </div>
+
+      <!-- STEP 1 DIALOGUE BOX: FETCH QUESTION PAPER PDF -->
+      <section id="wizardStep1Pdf" class="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 flex flex-col items-center justify-center text-center space-y-4">
+        <div id="wizardPdfDropArea" class="w-full border-2 border-dashed border-blue-400 hover:border-blue-600 bg-blue-50/50 hover:bg-blue-50 rounded-xl p-6 sm:p-8 flex flex-col items-center justify-center transition cursor-pointer">
+          <div class="w-14 h-14 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center mb-2.5 shadow-inner">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+          </div>
+          <h3 class="text-sm sm:text-base font-extrabold text-gray-800">
+            Fetch Your Question Paper PDF
+          </h3>
+          <p class="text-xs text-gray-600 mt-1 max-w-md">
+            Drag and drop your exam Question Paper <code class="bg-white px-1.5 py-0.5 rounded border text-blue-700 font-semibold">.pdf</code> file here, or click the button below to select it from your device.
+          </p>
+
+          <label for="pdfUploadInput" class="mt-4 cursor-pointer bg-[#f37e20] hover:bg-[#e06d10] text-white font-extrabold text-xs sm:text-sm px-5 py-2.5 rounded-lg shadow-md flex items-center gap-2 uppercase tracking-wider transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12V4m0 0L8 8m4-4l4 4"/>
+            </svg>
+            <span>UPLOAD QUESTION PDF</span>
+          </label>
+          <input id="pdfUploadInput" type="file" accept="application/pdf" class="hidden" />
+        </div>
+
+        <div id="parseProgressBox" class="hidden w-full bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-900 text-left shrink-0">
+          <div class="flex items-center justify-between font-bold">
+            <span id="parseProgressText">Reading PDF...</span>
+            <span id="parseProgressPct">0%</span>
+          </div>
+          <div class="h-1.5 bg-blue-100 rounded mt-1.5 overflow-hidden">
+            <div id="parseProgressBar" class="h-full bg-blue-600 transition-all" style="width:0%"></div>
+          </div>
+        </div>
+
+        <details class="w-full text-left text-xs text-gray-600 shrink-0">
+          <summary class="cursor-pointer font-semibold text-gray-700">Optional: use AI to split questions (for scanned / unusual PDFs)</summary>
+          <div class="mt-2 space-y-1.5 bg-gray-50 border border-gray-200 rounded-lg p-2.5">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input id="aiParseCheckbox" type="checkbox" class="w-3.5 h-3.5" />
+              <span>Use AI parsing instead of the built-in smart parser</span>
+            </label>
+            <input id="aiEndpointInput" type="text" placeholder="AI parse endpoint URL (your Cloudflare Worker / server)" class="w-full border border-gray-300 rounded px-2 py-1" />
+            <div class="text-[10px] text-gray-500">Normal text PDFs do not need this. The API key must live on your server, never in this file.</div>
+          </div>
+        </details>
+
+        <div class="w-full flex items-center justify-between pt-2 border-t border-gray-200 text-xs text-gray-500 shrink-0">
+          <span>Want to test with the built-in UGC-NET question paper?</span>
+          <button id="useSamplePaperStep1Btn" type="button" class="text-blue-700 hover:text-blue-900 font-bold underline">
+            Load Built-in UGC-NET Sample Paper →
+          </button>
+        </div>
+      </section>
+
+      <!-- STEP 2 DIALOGUE BOX: APPLY TEST SETTINGS (Supports Fractional Negative Marking like 1/3, 1/4) -->
+      <section id="wizardStep2Settings" class="hidden flex-1 min-h-0 flex-col overflow-hidden">
+        <form id="settingsForm" novalidate class="flex-1 min-h-0 flex flex-col overflow-hidden text-xs">
+          <!-- Scrollable Settings Fields -->
+          <div class="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-3">
+            <div class="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-center justify-between text-xs text-emerald-900">
+              <div class="flex items-center gap-2 truncate">
+                <span class="font-bold text-emerald-700">✓ Loaded PDF:</span>
+                <span id="step2LoadedPdfName" class="font-semibold truncate">Question_Paper.pdf</span>
+              </div>
+              <button id="backToStep1Btn" type="button" class="text-blue-700 hover:underline font-bold shrink-0 ml-2">
+                Change PDF
+              </button>
+            </div>
+
+            <div id="step2ParseSummary" class="hidden bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-900"></div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block font-semibold text-gray-700 mb-1">Candidate / Examinee Name</label>
+                <input id="inputCandidateName" type="text" value="Your Name" class="w-full border border-gray-300 rounded-md px-2.5 py-1.5 focus:outline-none focus:border-blue-600" />
+              </div>
+              <div>
+                <label class="block font-semibold text-gray-700 mb-1">Subject / Paper Name</label>
+                <input id="inputSubjectName" type="text" value="Mock Practice" class="w-full border border-gray-300 rounded-md px-2.5 py-1.5 focus:outline-none focus:border-blue-600" />
+              </div>
+              <div>
+                <label class="block font-semibold text-gray-700 mb-1">Exam Title</label>
+                <input id="inputExamTitle" type="text" value="PAPER NAME" class="w-full border border-gray-300 rounded-md px-2.5 py-1.5 focus:outline-none focus:border-blue-600" />
+              </div>
+              <div>
+                <label class="block font-semibold text-gray-700 mb-1">Total Questions in Test</label>
+                <input id="inputTotalQuestions" type="number" min="1" max="300" value="100" class="w-full border border-gray-300 rounded-md px-2.5 py-1.5 focus:outline-none focus:border-blue-600" />
+              </div>
+              <div>
+                <label class="block font-semibold text-gray-700 mb-1">Exam Duration (Minutes)</label>
+                <input id="inputDurationMinutes" type="number" min="1" max="300" value="90" class="w-full border border-gray-300 rounded-md px-2.5 py-1.5 focus:outline-none focus:border-blue-600" />
+              </div>
+              <div>
+                <label class="block font-semibold text-gray-700 mb-1">Option Label Format</label>
+                <select id="inputOptionFormat" class="w-full border border-gray-300 rounded-md px-2.5 py-1.5 focus:outline-none focus:border-blue-600 bg-white">
+                  <option value="numeric">1), 2), 3), 4) </option>
+                  <option value="alpha" selected>A), B), C), D) (NTA Default)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block font-semibold text-gray-700 mb-1">Marks for Correct Answer (+)</label>
+                <input id="inputPositiveMarks" type="text" value="2" placeholder="e.g. 1, 2, 4" class="w-full border border-gray-300 rounded-md px-2.5 py-1.5 focus:outline-none focus:border-blue-600" />
+              </div>
+              <div>
+                <label class="block font-semibold text-gray-700 mb-1">
+                  Negative Marking per Wrong (−) <span class="text-blue-700 font-normal">(Fractions or Decimals)</span>
+                </label>
+                <input id="inputNegativeMarks" type="text" value="1/3" placeholder="e.g. 0, 1/3, 1/4, 2/3, 0.25" class="w-full border border-gray-300 rounded-md px-2.5 py-1.5 focus:outline-none focus:border-blue-600 font-semibold" />
+                <div class="flex flex-wrap items-center gap-1 mt-1.5">
+                  <span class="text-[10px] text-gray-500 mr-0.5">Quick set:</span>
+                  <button type="button" data-neg-preset="0" class="neg-preset-btn bg-gray-100 hover:bg-blue-100 text-gray-700 hover:text-blue-800 border border-gray-300 rounded px-1.5 py-0.5 text-[10px] font-bold">0</button>
+                  <button type="button" data-neg-preset="1/4" class="neg-preset-btn bg-gray-100 hover:bg-blue-100 text-gray-700 hover:text-blue-800 border border-gray-300 rounded px-1.5 py-0.5 text-[10px] font-bold">1/4</button>
+                  <button type="button" data-neg-preset="1/3" class="neg-preset-btn bg-gray-100 hover:bg-blue-100 text-gray-700 hover:text-blue-800 border border-gray-300 rounded px-1.5 py-0.5 text-[10px] font-bold">1/3</button>
+                  <button type="button" data-neg-preset="1/2" class="neg-preset-btn bg-gray-100 hover:bg-blue-100 text-gray-700 hover:text-blue-800 border border-gray-300 rounded px-1.5 py-0.5 text-[10px] font-bold">1/2</button>
+                  <button type="button" data-neg-preset="2/3" class="neg-preset-btn bg-gray-100 hover:bg-blue-100 text-gray-700 hover:text-blue-800 border border-gray-300 rounded px-1.5 py-0.5 text-[10px] font-bold">2/3</button>
+                  <button type="button" data-neg-preset="1" class="neg-preset-btn bg-gray-100 hover:bg-blue-100 text-gray-700 hover:text-blue-800 border border-gray-300 rounded px-1.5 py-0.5 text-[10px] font-bold">1</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pinned Bottom Action Bar -->
+          <div class="px-5 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between gap-2 shrink-0">
+            <div class="flex items-center gap-2">
+              <button id="cancelSettingsBtn" type="button" class="bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 font-semibold px-3 py-1.5 rounded-md text-xs">
+                Cancel
+              </button>
+              <button id="resetAllResponsesBtn" type="button" class="text-red-600 hover:bg-red-50 border border-red-200 font-semibold px-3 py-1.5 rounded-md text-xs">
+                Reset All Responses
+              </button>
+            </div>
+            <button type="submit" class="bg-[#286090] hover:bg-[#204d74] text-white font-bold px-5 py-2 rounded-md text-xs shadow">
+              Save &amp; Apply
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- STEP 3 DIALOGUE BOX: UPLOAD / SETUP ANSWER KEY (Fits cleanly inside viewport) -->
+      <section id="wizardStep3AnswerKey" class="hidden flex-1 min-h-0 flex-col overflow-hidden">
+        <div id="answerKeyModal" class="hidden">
+          <p id="answerKeyModalSubtitle"></p>
+          <button id="closeAnswerKeyModalBtn" type="button">&times;</button>
+          <button id="saveAnswerKeyBtn" type="button">Done &amp; Save Answer Key</button>
+        </div>
+
+        <!-- Upload Answer Key File Section (Compact) -->
+        <div class="px-4 py-2.5 bg-blue-50/80 border-b border-blue-200 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0">
+          <div>
+            <div class="font-bold text-blue-950 text-xs sm:text-sm">Upload Answer Key File (.pdf, .csv, .txt, .json)</div>
+            <div id="uploadedKeyFileStatus" class="text-[11px] text-blue-800">
+              Auto-extracts Question Numbers &amp; Correct Options from Answer Key PDF or CSV/TXT list.
+            </div>
+          </div>
+          <label for="answerKeyFileInput" class="cursor-pointer bg-[#286090] hover:bg-[#204d74] text-white font-bold px-3 py-1.5 rounded-md shadow-xs flex items-center gap-1.5 transition shrink-0">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12V4m0 0L8 8m4-4l4 4"/>
+            </svg>
+            <span>Upload Answer Key File</span>
+          </label>
+          <input id="answerKeyFileInput" type="file" accept=".pdf,.csv,.txt,.json,application/pdf,text/plain,text/csv" class="hidden" />
+        </div>
+
+        <!-- Bulk Paste Answer Key Bar -->
+        <div class="px-4 py-2 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0">
+          <div class="flex items-center gap-2 flex-1">
+            <input id="bulkAnswerKeyInput" type="text" placeholder="Paste answers e.g. 3,1,4,2,1,3 or C,A,D,B..." class="flex-1 border border-gray-300 rounded px-2.5 py-1" />
+            <button id="applyBulkAnswerKeyBtn" type="button" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-3 py-1 rounded">
+              Apply Bulk Key
+            </button>
+          </div>
+          <button id="clearAnswerKeyBtn" type="button" class="text-gray-600 hover:text-red-600 font-medium px-2 py-1">
+            Clear Key
+          </button>
+        </div>
+
+        <!-- Per-Question Selectors Grid (Flex-1 Scrollable so Footer is never pushed off-screen!) -->
+        <div id="answerKeyGridContainer" class="flex-1 min-h-0 p-3 sm:p-4 overflow-y-auto grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2 text-xs content-start">
+          <!-- Dynamically populated -->
+        </div>
+
+        <!-- Pinned Bottom Action Bar -->
+        <div class="px-4 py-2.5 bg-gray-100 border-t border-gray-200 flex items-center justify-between gap-2 shrink-0">
+          <button id="backToStep2Btn" type="button" class="bg-white hover:bg-gray-200 text-gray-700 border border-gray-300 font-semibold px-3.5 py-1.5 rounded-md text-xs">
+            ← Back to Settings
+          </button>
+          <button id="proceedToStartExamBtn" type="button" class="bg-[#16a34a] hover:bg-[#15803d] text-white font-bold px-5 py-2 rounded-md text-xs shadow">
+            Save Key &amp; Proceed to Start Examination →
+          </button>
+        </div>
+      </section>
+
+      <!-- STEP 4 DIALOGUE BOX: READY TO START EXAMINATION IN FULL SCREEN (Fits cleanly inside viewport) -->
+      <section id="wizardStep4Start" class="hidden flex-1 min-h-0 flex-col overflow-hidden text-xs">
+        <div id="startExamModal" class="hidden">
+          <button id="closeStartExamModalBtn" type="button">&times;</button>
+          <input id="startModalTotalQuestions" type="number" value="100" />
+          <input id="startModalDurationMins" type="number" value="90" />
+        </div>
+
+        <!-- Scrollable Summary & Instructions Area -->
+        <div class="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-3">
+          <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1.5">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-1.5">
+              <span class="text-gray-600 font-medium">Question Paper PDF:</span>
+              <span id="startModalPaperName" class="font-bold text-blue-800 truncate max-w-[260px]">Question_Paper.pdf</span>
+            </div>
+            <div class="flex items-center justify-between border-b border-slate-200 pb-1.5">
+              <span class="text-gray-600 font-medium">Examinee &amp; Subject:</span>
+              <span id="summaryWizardCandidate" class="font-bold text-gray-800">Your Name — Mock Practice</span>
+            </div>
+            <div class="flex items-center justify-between border-b border-slate-200 pb-1.5">
+              <span class="text-gray-600 font-medium">Questions, Time &amp; Marking:</span>
+              <span id="summaryWizardConfig" class="font-bold text-gray-800">100 Questions | 90 Mins (+2 / -1/3)</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-gray-600 font-medium">Answer Key Loaded:</span>
+              <span id="startModalKeyStatus" class="font-bold text-emerald-700">100 / 100 Answers Configured</span>
+            </div>
+          </div>
+
+          <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-950 space-y-1">
+            <div class="font-bold uppercase tracking-wide text-amber-900">Examination Mode Instructions:</div>
+            <ul class="list-disc pl-4 space-y-0.5 leading-snug">
+              <li>Clicking <strong>START EXAMINATION</strong> launches the test in <strong>Full Screen Mode</strong> showing only the top white header, the Question Paper on the left, and the Answer Palette on the right.</li>
+              <li>A warning alert triggers when <strong>only 5 minutes (00:05:00)</strong> remain, and the test <strong>auto-submits at 00:00:00</strong>.</li>
+            </ul>
+          </div>
+
+          <label class="flex items-start gap-2 cursor-pointer bg-gray-50 p-2.5 rounded-lg border border-gray-200 text-xs">
+            <input id="declarationCheckbox" type="checkbox" checked class="mt-0.5 w-4 h-4 text-blue-600 rounded" />
+            <span class="text-gray-700 font-medium leading-snug">
+              I have verified my Question Paper PDF, Test Settings, and Answer Key. I am ready to begin the examination in Full Screen mode.
+            </span>
+          </label>
+        </div>
+
+        <!-- Pinned Bottom Action Bar (Always visible on screen) -->
+        <div class="px-4 py-3 bg-gray-100 border-t border-gray-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+          <button id="backToAnswerKeyBtn" type="button" class="bg-white hover:bg-gray-200 text-gray-700 border border-gray-300 font-semibold px-3.5 py-2 rounded-md text-xs">
+            ← Back to Answer Key
+          </button>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button id="startDemoFiveMinBtn" type="button" title="Starts the exam at 00:05:05 so you can test the 5-minute warning in 5 seconds" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-2 rounded-md text-xs shadow-xs transition">
+              ⚡ Demo 5-Min Warning (5:05)
+            </button>
+            <button id="startExamNowBtn" type="button" class="bg-[#16a34a] hover:bg-[#15803d] text-white font-extrabold px-5 py-2 rounded-md text-xs sm:text-sm uppercase tracking-wider shadow-md flex items-center gap-2 transition">
+              <span>⛶ START EXAMINATION</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- VIEW 2: FULL-SCREEN EXAM WORKSPACE (Hidden until START EXAMINATION is clicked) -->
+  <!-- Shows ONLY Question Paper on Left and Answer Palette on Right below White Header -->
+  <!-- ===================================================================== -->
+  <div id="examMainWorkspace" class="hidden flex-1 overflow-hidden relative bg-white">
+
+    <!-- PAUSE OVERLAY: hides the paper while the clock is stopped -->
+    <div id="pauseOverlay" class="hidden absolute inset-0 z-30 bg-slate-900/95 items-center justify-center p-4">
+      <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full text-center p-6 space-y-3">
+        <div class="text-4xl">⏸</div>
+        <h2 class="text-lg font-extrabold text-[#1e3a8a] uppercase tracking-wide">Test Paused</h2>
+        <p class="text-sm text-gray-600">The timer is stopped. Time left: <strong id="pauseTimeLeft" class="text-gray-900">00:00:00</strong></p>
+        <button id="resumeFromPauseBtn" type="button" class="w-full bg-[#16a34a] hover:bg-[#15803d] text-white font-extrabold px-5 py-2.5 rounded-md text-sm uppercase tracking-wider shadow">
+          ▶ Resume Test
+        </button>
+      </div>
+    </div>
+
+    <!-- LEFT SIDE: Question Paper PDF Viewer & Answer Selection Area -->
+    <div id="leftPane" class="flex-1 flex flex-col h-full overflow-hidden border-r border-gray-300 relative">
+
+      <!-- Question Number & PDF Controls Toolbar -->
+      <div class="bg-[#f8f9fa] border-b border-gray-300 px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 shrink-0">
+        <!-- Question Indicator & Marks -->
+        <div class="flex items-center gap-3">
+          <span id="currentQuestionHeader" class="text-sm font-bold text-[#1e3a8a]">
+            Question No. 01
+          </span>
+          <span id="marksBadge" class="text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded font-semibold">
+            +2 / -1/3 Marks
+          </span>
+          <span id="questionPageLinkBadge" class="text-[11px] text-gray-500 hidden sm:inline">
+            (Viewing PDF Page 1)
+          </span>
+        </div>
+
+        <!-- PDF Navigation & Zoom Controls -->
+        <div class="flex items-center gap-1.5 text-xs">
+          <div id="pdfPageNavGroup" class="flex items-center bg-white border border-gray-300 rounded overflow-hidden shadow-2xs">
+            <button id="pdfPrevPageBtn" type="button" title="Previous PDF Page" class="px-2.5 py-1 hover:bg-gray-100 text-gray-700 font-bold border-r border-gray-200">
+              ◀
+            </button>
+            <span class="px-2 py-1 text-gray-700 font-medium">
+              Page <input id="pdfPageInput" type="number" min="1" value="1" class="w-10 text-center border border-gray-300 rounded text-xs py-0.5 mx-0.5" /> / <span id="pdfTotalPagesText">5</span>
+            </span>
+            <button id="pdfNextPageBtn" type="button" title="Next PDF Page" class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold border-l border-gray-200">
+              ▶
+            </button>
+          </div>
+
+          <div class="flex items-center bg-white border border-gray-300 rounded overflow-hidden">
+            <button id="zoomOutBtn" type="button" title="Zoom Out PDF" class="px-2 py-1 hover:bg-gray-100 text-gray-700 font-bold border-r border-gray-200">
+              −
+            </button>
+            <span id="zoomLevelText" class="px-2 py-1 text-gray-700 font-semibold min-w-[48px] text-center">
+              100%
+            </span>
+            <button id="zoomInBtn" type="button" title="Zoom In PDF" class="px-2 py-1 hover:bg-gray-100 text-gray-700 font-bold border-l border-gray-200">
+              +
+            </button>
+            <button id="fitWidthBtn" type="button" title="Reset Zoom" class="px-2 py-1 hover:bg-gray-100 text-blue-700 font-medium border-l border-gray-200">
+              Fit
+            </button>
+          </div>
+
+          <button id="openPaletteBtn" type="button" class="lg:hidden bg-[#337ab7] hover:bg-[#286090] text-white font-bold px-2.5 py-1 rounded">
+            ☰ Questions
+          </button>
+
+          <button id="toggleViewModeBtn" type="button" title="Show the original PDF page this question came from" class="hidden bg-white hover:bg-blue-50 text-blue-700 border border-blue-300 font-semibold px-2.5 py-1 rounded">
+            Full PDF Page
+          </button>
+
+          <label class="hidden items-center gap-1 text-[11px] text-gray-600 bg-white border border-gray-300 rounded px-2 py-1 cursor-pointer">
+            <input id="autoSyncPageCheckbox" type="checkbox" class="rounded text-blue-600" />
+            <span>Auto-Sync Page</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- SCROLLABLE QUESTION PAPER PDF VIEWPORT -->
+      <div id="pdfViewportContainer" class="flex-1 pdf-canvas-wrapper light-bg overflow-y-auto p-3 sm:p-5 flex flex-col items-center relative">
+        <div id="dropZoneBanner" class="hidden">
+          <button id="dismissBannerBtn" type="button">✕</button>
+        </div>
+
+        <!-- One-question-per-screen image (cropped from the uploaded PDF by the smart parser) -->
+        <div id="questionImageWrap" class="hidden w-full flex-col items-center">
+          <img id="questionImage" alt="Question" draggable="false" class="bg-white shadow-md border border-gray-300 select-none" />
+          <div id="questionImageMissing" class="hidden bg-amber-50 border border-amber-300 text-amber-900 text-sm rounded-lg px-4 py-3 max-w-xl text-center">
+            This question was not detected in the PDF. Click <strong>Full PDF Page</strong> above to read it from the original page.
+          </div>
+        </div>
+
+        <!-- Uploaded PDF Canvas Wrapper (Used when user uploads a real PDF file) -->
+        <div id="pdfCanvasContainer" class="hidden flex-col items-center gap-4 w-full">
+          <canvas id="pdfRenderCanvas" class="bg-white shadow-md border border-gray-300 max-w-full"></canvas>
+        </div>
+
+        <!-- Built-in Sample NTA Question Paper Sheet -->
+        <div id="sampleQuestionSheet" class="w-full max-w-4xl bg-white border border-gray-300 shadow-xs p-5 sm:p-7 text-gray-900 leading-relaxed transition-all origin-top">
+          <!-- Dynamically populated by renderPdfOrSampleView() -->
+        </div>
+      </div>
+
+      <!-- OPTION RADIO ROW: Shows Question No. right before Options -->
+      <div class="bg-white border-t border-gray-300 px-4 py-2.5 flex flex-wrap items-center justify-between gap-4 shrink-0">
+        <div class="flex items-center gap-4 sm:gap-8 flex-wrap">
+          <!-- Question Number Badge shown directly before the options -->
+          <span id="optionRowQuestionNo" class="bg-[#1e3a8a] text-white font-extrabold text-xs sm:text-sm px-3 py-1 rounded shadow-2xs tracking-wide shrink-0">
+            Question No. 01 :
+          </span>
+
+          <div class="flex items-center gap-1 sm:gap-12 flex-wrap" id="optionsRadioContainer">
+            <label class="inline-flex items-center gap-2 cursor-pointer text-base sm:text-sm font-semibold text-gray-800 hover:text-blue-700 py-2 px-3 sm:py-1 sm:px-2 rounded hover:bg-blue-50/50 transition">
+              <input type="radio" name="ntaOption" value="1" class="w-5 h-5 sm:w-4 sm:h-4 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+              <span class="option-label-text">A)</span>
+            </label>
+            <label class="inline-flex items-center gap-2 cursor-pointer text-base sm:text-sm font-semibold text-gray-800 hover:text-blue-700 py-2 px-3 sm:py-1 sm:px-2 rounded hover:bg-blue-50/50 transition">
+              <input type="radio" name="ntaOption" value="2" class="w-5 h-5 sm:w-4 sm:h-4 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+              <span class="option-label-text">B)</span>
+            </label>
+            <label class="inline-flex items-center gap-2 cursor-pointer text-base sm:text-sm font-semibold text-gray-800 hover:text-blue-700 py-2 px-3 sm:py-1 sm:px-2 rounded hover:bg-blue-50/50 transition">
+              <input type="radio" name="ntaOption" value="3" class="w-5 h-5 sm:w-4 sm:h-4 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+              <span class="option-label-text">C)</span>
+            </label>
+            <label class="inline-flex items-center gap-2 cursor-pointer text-base sm:text-sm font-semibold text-gray-800 hover:text-blue-700 py-2 px-3 sm:py-1 sm:px-2 rounded hover:bg-blue-50/50 transition">
+              <input type="radio" name="ntaOption" value="4" class="w-5 h-5 sm:w-4 sm:h-4 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+              <span class="option-label-text">D)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="text-xs text-gray-500 flex items-center gap-2">
+          <span id="selectedOptionStatus" class="font-medium text-gray-600">No option selected</span>
+        </div>
+      </div>
+
+      <!-- NTA ACTION BUTTONS BAR -->
+      <div class="bg-white border-t border-gray-200 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 shrink-0">
+        <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full sm:w-auto">
+          <button id="saveAndNextBtn" type="button" class="bg-[#5cb85c] hover:bg-[#4cae4c] active:bg-[#449d44] text-white font-bold text-xs px-3.5 py-2 rounded-xs uppercase tracking-wide shadow-2xs transition">
+            SAVE &amp; NEXT
+          </button>
+
+          <button id="saveAndMarkReviewBtn" type="button" class="bg-[#f0ad4e] hover:bg-[#eea236] active:bg-[#ec971f] text-white font-bold text-xs px-3.5 py-2 rounded-xs uppercase tracking-wide shadow-2xs transition">
+            SAVE &amp; MARK FOR REVIEW
+          </button>
+
+          <button id="clearResponseBtn" type="button" class="bg-white hover:bg-gray-100 active:bg-gray-200 text-gray-800 border border-gray-300 font-bold text-xs px-3.5 py-2 rounded-xs uppercase tracking-wide shadow-2xs transition">
+            CLEAR RESPONSE
+          </button>
+
+          <button id="markReviewAndNextBtn" type="button" class="bg-[#337ab7] hover:bg-[#286090] active:bg-[#204d74] text-white font-bold text-xs px-3.5 py-2 rounded-xs uppercase tracking-wide shadow-2xs transition">
+            MARK FOR REVIEW &amp; NEXT
+          </button>
+        </div>
+
+        <!-- Dedicated PDF Page Turn Buttons right beside Action Buttons -->
+        <div id="dedicatedPageBtnGroup" class="flex items-center gap-1.5">
+          <button id="dedicatedPrevPageBtn" type="button" class="bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-bold text-xs px-3 py-2 rounded-xs uppercase tracking-wide shadow-2xs transition">
+            ◀ PREV PDF PAGE
+          </button>
+          <button id="dedicatedNextPageBtn" type="button" class="bg-[#1e3a8a] hover:bg-[#172554] text-white font-bold text-xs px-3.5 py-2 rounded-xs uppercase tracking-wide shadow-2xs transition">
+            NEXT PDF PAGE ▶
+          </button>
+        </div>
+      </div>
+
+      <!-- BOTTOM NAVIGATION & SUBMIT BAR -->
+      <div class="bg-[#f5f5f5] border-t border-gray-300 px-4 py-2 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-1.5">
+          <button id="prevQuestionBtn" type="button" class="bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 font-bold text-xs px-3 py-1.5 rounded-xs shadow-2xs transition">
+            &lt;&lt; BACK
+          </button>
+          <button id="nextQuestionBtn" type="button" class="bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 font-bold text-xs px-3 py-1.5 rounded-xs shadow-2xs transition">
+            NEXT &gt;&gt;
+          </button>
+        </div>
+
+        <button id="submitExamBtn" type="button" class="bg-[#5cb85c] hover:bg-[#4cae4c] text-white font-bold text-xs px-6 py-2 rounded-xs uppercase tracking-wider shadow-xs transition">
+          SUBMIT
+        </button>
+      </div>
+
+      <!-- COLLAPSE / EXPAND RIGHT PALETTE HANDLE -->
+      <button id="togglePaletteBtn" type="button" title="Toggle Question Palette" class="hidden lg:flex items-center justify-center w-5 h-12 bg-black/85 hover:bg-black text-white font-bold text-xs absolute right-0 top-1/2 -translate-y-1/2 z-20 rounded-l cursor-pointer shadow">
+        <span id="togglePaletteIcon">&gt;</span>
+      </button>
+    </div>
+
+    <!-- RIGHT SIDE: NTA Status Legend & Question Number Answer Palette -->
+    <div id="paletteBackdrop" class="fixed inset-0 bg-black/50 z-40 lg:hidden"></div>
+    <aside id="rightPalettePane" class="w-full sm:w-80 md:w-96 bg-white flex flex-col h-full shrink-0 overflow-hidden transition-all">
+      <div class="lg:hidden flex items-center justify-between bg-slate-800 text-white px-3 py-2 text-sm font-bold shrink-0">
+        <span>Question Palette</span>
+        <button id="closePaletteBtn" type="button" class="px-2 text-lg leading-none" aria-label="Close palette">✕</button>
+      </div>
+
+      <!-- 5-State Status Summary Legend -->
+      <div class="p-3 border-b border-gray-300 bg-[#fdfdfd] shrink-0">
+        <div class="grid grid-cols-2 gap-x-2 gap-y-2.5 text-xs text-gray-800">
+          <!-- Not Visited -->
+          <div class="flex items-center gap-2">
+            <span id="countNotVisited" class="nta-badge status-not-visited w-8 h-7 shrink-0 cursor-default">99</span>
+            <span class="font-medium leading-tight">Not Visited</span>
+          </div>
+
+          <!-- Not Answered -->
+          <div class="flex items-center gap-2">
+            <span id="countNotAnswered" class="nta-badge status-not-answered w-8 h-7 shrink-0 cursor-default">1</span>
+            <span class="font-medium leading-tight">Not Answered</span>
+          </div>
+
+          <!-- Answered -->
+          <div class="flex items-center gap-2">
+            <span id="countAnswered" class="nta-badge status-answered w-8 h-7 shrink-0 cursor-default">0</span>
+            <span class="font-medium leading-tight">Answered</span>
+          </div>
+
+          <!-- Marked for Review -->
+          <div class="flex items-center gap-2">
+            <span id="countReview" class="nta-badge status-review w-8 h-7 shrink-0 cursor-default">0</span>
+            <span class="font-medium leading-tight">Marked for Review</span>
+          </div>
+
+          <!-- Answered & Marked for Review (Full Width) -->
+          <div class="col-span-2 flex items-center gap-2.5 pt-0.5">
+            <span id="countAnsweredReview" class="nta-badge status-answered-review w-8 h-8 shrink-0 cursor-default">0</span>
+            <span class="font-medium leading-tight text-[11px] text-gray-700">
+              Answered &amp; Marked for Review (will be considered for evaluation)
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Palette Section Header & Filter -->
+      <div class="bg-[#337ab7] text-white px-3 py-1.5 flex items-center justify-between text-xs font-bold shrink-0">
+        <span>Choose a Question</span>
+        <select id="paletteFilterSelect" aria-label="Filter Questions by Status" class="bg-white/15 hover:bg-white/25 text-white text-[11px] font-medium rounded px-1.5 py-0.5 border border-white/30 focus:outline-none">
+          <option value="all" class="text-gray-900">All Questions</option>
+          <option value="0" class="text-gray-900">Not Visited</option>
+          <option value="1" class="text-gray-900">Not Answered</option>
+          <option value="2" class="text-gray-900">Answered</option>
+          <option value="3" class="text-gray-900">Marked for Review</option>
+          <option value="4" class="text-gray-900">Answered &amp; Marked</option>
+        </select>
+      </div>
+
+      <!-- Question Palette Scrollable Number Grid -->
+      <div class="flex-1 overflow-y-auto p-3 bg-white">
+        <div id="questionPaletteGrid" class="grid grid-cols-7 sm:grid-cols-8 gap-1.5">
+          <!-- Dynamically populated buttons -->
+        </div>
+      </div>
+
+      <!-- Quick Map Question to Current PDF Page Footer -->
+      <div class="p-2.5 bg-gray-50 border-t border-gray-200 text-[11px] text-gray-600 flex items-center justify-between gap-2 shrink-0">
+        <span>Current Question: <strong id="pinQuestionLabel">Q.01</strong> | Viewing PDF Page <strong id="pinPageNumberLabel">1</strong></span>
+        <button id="pinQuestionToPageBtn" type="button" class="bg-white hover:bg-blue-50 text-blue-700 border border-blue-300 font-semibold px-2 py-1 rounded shadow-2xs transition">
+          📌 Pin Page
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toastMessage" class="fixed bottom-14 left-1/2 -translate-x-1/2 z-50 hidden bg-gray-900/95 text-white text-xs font-semibold px-4 py-2.5 rounded-md shadow-lg border border-gray-700 items-center gap-2">
+    <span id="toastText">Notification</span>
+  </div>
+
+  <!-- 5-MINUTE REMAINING WARNING POPUP MODAL -->
+  <div id="fiveMinWarningModal" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-lg shadow-2xl max-w-md w-full overflow-hidden border-2 border-red-600">
+      <div class="bg-red-600 text-white px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">⚠️</span>
+          <h2 class="font-extrabold text-sm uppercase tracking-wider">5 Minutes Remaining Warning!</h2>
+        </div>
+        <button id="closeFiveMinModalBtn" type="button" class="text-white/80 hover:text-white font-bold text-xl leading-none">&times;</button>
+      </div>
+      <div class="p-5 space-y-3 text-xs sm:text-sm text-gray-800">
+        <p class="font-semibold text-red-700">
+          Attention Examinee! Only <strong>05:00 minutes</strong> remain in your examination.
+        </p>
+        <p class="text-gray-600 leading-relaxed">
+          Please review any marked questions and make sure to click <strong>SAVE &amp; NEXT</strong> on your selections. The examination will <strong>automatically submit</strong> when the timer reaches <strong>00:00:00</strong>.
+        </p>
+      </div>
+      <div class="px-4 py-3 bg-gray-100 border-t border-gray-200 flex justify-end">
+        <button id="ackFiveMinWarningBtn" type="button" class="bg-red-600 hover:bg-red-700 text-white font-bold px-5 py-1.5 rounded text-xs uppercase tracking-wide">
+          OK, Continue Exam
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXAM SUBMIT & RESULT SCORECARD MODAL -->
+  <div id="submitResultModal" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-lg shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
+      <div class="bg-[#1e3a8a] text-white px-5 py-3 flex items-center justify-between shrink-0">
+        <h2 class="font-bold text-base uppercase tracking-wider">NTA Mock Test - Exam Summary &amp; Scorecard</h2>
+        <button id="closeSubmitModalBtn" type="button" class="text-white/80 hover:text-white font-bold text-xl leading-none">&times;</button>
+      </div>
+
+      <!-- Auto-Submitted Notification Banner (Visible when timer exhausts) -->
+      <div id="autoSubmitAlertBanner" class="hidden bg-red-600 text-white px-5 py-2.5 text-xs sm:text-sm font-bold items-center justify-between shrink-0">
+        <span>⏰ TIME EXHAUSTED (00:00:00) — Your examination has been automatically submitted!</span>
+        <span class="bg-white/20 px-2 py-0.5 rounded text-[11px]">Auto-Submitted</span>
+      </div>
+
+      <div class="p-5 overflow-y-auto space-y-5 flex-1 text-xs sm:text-sm">
+        <!-- Status Breakdown Counts -->
+        <div>
+          <h3 class="font-bold text-gray-800 mb-2 uppercase text-xs tracking-wider">Attempt Summary</h3>
+          <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-center">
+            <div class="p-2.5 rounded border border-gray-200 bg-gray-50">
+              <div id="summaryNotVisited" class="text-lg font-extrabold text-gray-700">0</div>
+              <div class="text-[11px] text-gray-500 font-medium">Not Visited</div>
+            </div>
+            <div class="p-2.5 rounded border border-red-200 bg-red-50">
+              <div id="summaryNotAnswered" class="text-lg font-extrabold text-red-600">0</div>
+              <div class="text-[11px] text-red-700 font-medium">Not Answered</div>
+            </div>
+            <div class="p-2.5 rounded border border-emerald-200 bg-emerald-50">
+              <div id="summaryAnswered" class="text-lg font-extrabold text-emerald-700">0</div>
+              <div class="text-[11px] text-emerald-800 font-medium">Answered</div>
+            </div>
+            <div class="p-2.5 rounded border border-purple-200 bg-purple-50">
+              <div id="summaryReview" class="text-lg font-extrabold text-purple-700">0</div>
+              <div class="text-[11px] text-purple-800 font-medium">Marked for Review</div>
+            </div>
+            <div class="p-2.5 rounded border border-indigo-200 bg-indigo-50">
+              <div id="summaryAnsweredReview" class="text-lg font-extrabold text-indigo-700">0</div>
+              <div class="text-[11px] text-indigo-800 font-medium">Answered &amp; Marked</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Score Evaluation Box -->
+        <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h3 class="font-bold text-slate-800 uppercase text-xs tracking-wider">Scorecard Evaluation (Includes Answered &amp; Marked for Review)</h3>
+            <button id="editKeyFromResultBtn" type="button" class="text-blue-600 hover:underline text-xs font-semibold">
+              Edit Answer Key
+            </button>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+            <div class="bg-white p-3 rounded border border-slate-200">
+              <div id="scoreTotalMarks" class="text-xl font-extrabold text-blue-700">0 / 200</div>
+              <div class="text-[11px] text-gray-500 font-medium">Final Score</div>
+            </div>
+            <div class="bg-white p-3 rounded border border-slate-200">
+              <div id="scoreCorrectCount" class="text-xl font-extrabold text-emerald-600">0</div>
+              <div class="text-[11px] text-gray-500 font-medium">Correct Answers</div>
+            </div>
+            <div class="bg-white p-3 rounded border border-slate-200">
+              <div id="scoreWrongCount" class="text-xl font-extrabold text-red-600">0</div>
+              <div class="text-[11px] text-gray-500 font-medium">Incorrect Answers</div>
+            </div>
+            <div class="bg-white p-3 rounded border border-slate-200">
+              <div id="scoreAccuracy" class="text-xl font-extrabold text-amber-600">0%</div>
+              <div class="text-[11px] text-gray-500 font-medium">Accuracy</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detailed Question-wise Response Table -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="font-bold text-gray-800 uppercase text-xs tracking-wider">Question-wise Response Sheet</h3>
+            <button id="exportCsvBtn" type="button" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1 rounded">
+              ⬇ Download Response CSV
+            </button>
+          </div>
+          <div class="border border-gray-200 rounded max-h-60 overflow-y-auto">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead class="bg-gray-100 text-gray-700 sticky top-0">
+                <tr>
+                  <th class="py-2 px-3 border-b">Q.No</th>
+                  <th class="py-2 px-3 border-b">Status</th>
+                  <th class="py-2 px-3 border-b">Your Answer</th>
+                  <th class="py-2 px-3 border-b">Correct Key</th>
+                  <th class="py-2 px-3 border-b">Result</th>
+                </tr>
+              </thead>
+              <tbody id="resultTableBody" class="divide-y divide-gray-200">
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-5 py-3 bg-gray-100 border-t border-gray-200 flex items-center justify-between shrink-0">
+        <button id="resumeTestBtn" type="button" class="bg-white hover:bg-gray-200 text-gray-800 border border-gray-300 font-bold px-4 py-1.5 rounded text-xs">
+          ← Return to Test
+        </button>
+        <button id="startFreshTestBtn" type="button" class="bg-[#d9534f] hover:bg-[#c9302c] text-white font-bold px-4 py-1.5 rounded text-xs">
+          Reset &amp; Start Fresh Attempt
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Configure PDF.js worker if available
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    // Status Constants matching NTA CBT
+    const STATUS_NOT_VISITED = 0;
+    const STATUS_NOT_ANSWERED = 1;
+    const STATUS_ANSWERED = 2;
+    const STATUS_REVIEW = 3;
+    const STATUS_ANSWERED_REVIEW = 4;
+
+    // Built-in Sample UGC-NET Question Paper Questions
+    const SAMPLE_QUESTIONS = [
+      {
+        qNo: 1,
+        page: 1,
+        stem: "Which of the following set of statements best describes the nature and objectives of teaching ?\nIndicate your answer by selecting from the code.",
+        statements: [
+          "(a) Teaching and learning are integrally related.",
+          "(b) There is no difference between teaching and training.",
+          "(c) Concern of all teaching is to ensure some kind of transformation in students.",
+          "(d) All good teaching is formal in nature.",
+          "(e) A teacher is a senior person.",
+          "(f) Teaching is a social act whereas learning is a personal act."
+        ],
+        codePrompt: "Code :",
+        options: [
+          "(1) (a), (b) and (d)",
+          "(2) (b), (c) and (e)",
+          "(3) (a), (c) and (f)",
+          "(4) (d), (e) and (f)"
+        ],
+        correctOption: "3"
+      },
+      {
+        qNo: 2,
+        page: 1,
+        stem: "Which of the following learner characteristics is highly related to effectiveness of teaching ?",
+        statements: [],
+        codePrompt: "Options :",
+        options: [
+          "(1) Prior experience of the learner",
+          "(2) Educational status of the parents of the learner",
+          "(3) Peer groups of the learner",
+          "(4) Family size from which the learner comes"
+        ],
+        correctOption: "1"
+      },
+      {
+        qNo: 3,
+        page: 2,
+        stem: "In the two sets given below, Set - I indicates methods of teaching while Set - II provides the basic requirements for success/effectiveness. Match the two sets and indicate your answer from the code :",
+        statements: [
+          "Set - I (Method of teaching)          |  Set - II (Basic requirements for success)",
+          "(a) Lecturing                         |  (i) Small step presentation with feedback provided",
+          "(b) Discussion in groups              |  (ii) Production of large number of ideas",
+          "(c) Brainstorming                     |  (iii) Content delivery in a lucid language",
+          "(d) Programmed Instructional procedure|  (iv) Theme based interaction among participants"
+        ],
+        codePrompt: "Code :",
+        options: [
+          "(1) (a)-(i), (b)-(ii), (c)-(iii), (d)-(iv)",
+          "(2) (a)-(ii), (b)-(iii), (c)-(iv), (d)-(i)",
+          "(3) (a)-(iii), (b)-(iv), (c)-(ii), (d)-(i)",
+          "(4) (a)-(iv), (b)-(ii), (c)-(i), (d)-(iii)"
+        ],
+        correctOption: "3"
+      },
+      {
+        qNo: 4,
+        page: 2,
+        stem: "From the list of evaluation procedures given below, identify those which will be called 'formative evaluation'. Indicate your answer by choosing from the code :",
+        statements: [
+          "(a) A teacher awards grades to students after having transacted the course work.",
+          "(b) During interaction with students in the classroom, the teacher provides corrective feedback.",
+          "(c) The teacher gives marks to students on a unit test.",
+          "(d) The teacher clarifies the doubts of students in the class itself.",
+          "(e) The overall performance of a students is reported to parents at every three months interval.",
+          "(f) The learner's motivation is raised by the teacher through a question-answer session."
+        ],
+        codePrompt: "Code :",
+        options: [
+          "(1) (a), (b) and (c)",
+          "(2) (b), (c) and (d)",
+          "(3) (a), (c) and (e)",
+          "(4) (b), (d) and (f)"
+        ],
+        correctOption: "4"
+      },
+      {
+        qNo: 5,
+        page: 3,
+        stem: "Assertion (A) : All teaching should aim at ensuring learning.\nReason (R) : All learning results from teaching.\nChoose the correct answer from the following code :",
+        statements: [],
+        codePrompt: "Options :",
+        options: [
+          "(1) Both (A) and (R) are true, and (R) is the correct explanation of (A).",
+          "(2) Both (A) and (R) are true, but (R) is not the correct explanation of (A).",
+          "(3) (A) is true, but (R) is false.",
+          "(4) (A) is false, but (R) is true."
+        ],
+        correctOption: "3"
+      },
+      {
+        qNo: 6,
+        page: 3,
+        stem: "There are two sets given below. Set - I specifies the types of research, while Set - II indicates their characteristics. Match the two and give your answer by selecting the appropriate code.",
+        statements: [
+          "(a) Fundamental research  —  (ii)Developing an effective explanation through theory building",
+          "(b) Applied research      —  (iv) Exploring the possibility of a theory for use in various situations",
+          "(c) Action research       —  (iii) Improving an existing situation through use of interventions",
+          "(d) Evaluative research   —  (i) Finding out the extent of perceived impact of an intervention"
+        ],
+        codePrompt: "Code :",
+        options: [
+          "(1) (a)-(ii), (b)-(iv), (c)-(iii), (d)-(i)",
+          "(2) (a)-(v), (b)-(iv), (c)-(iii), (d)-(ii)",
+          "(3) (a)-(i), (b)-(ii), (c)-(iii), (d)-(iv)",
+          "(4) (a)-(ii), (b)-(iii), (c)-(iv), (d)-(v)"
+        ],
+        correctOption: "1"
+      },
+      {
+        qNo: 7,
+        page: 4,
+        stem: "Which of the sets of activities best indicate the cyclic nature of action research strategy ?",
+        statements: [],
+        codePrompt: "Options :",
+        options: [
+          "(1) Reflect, Observe, Plan, Act",
+          "(2) Observe, Act, Reflect, Plan",
+          "(3) Act, Plan, Observe, Reflect",
+          "(4) Plan, Act, Observe, Reflect"
+        ],
+        correctOption: "4"
+      },
+      {
+        qNo: 8,
+        page: 4,
+        stem: "Which of the following sequence of research steps is nearer to scientific method ?",
+        statements: [],
+        codePrompt: "Options :",
+        options: [
+          "(1) Suggested solution of the problem, Deducing the consequences of the solution, Perceiving the problem situation, Location of the difficulty and testing the solutions.",
+          "(2) Perceiving the problem situation, Locating the actual problem and its definition, Hypothesizing, Deducing the consequences of the suggested solution and Testing the hypothesis in action.",
+          "(3) Defining a problem, Identifying the causes of the problem, Defining a population, Drawing a sample, Collecting data and Analysing results.",
+          "(4) Identifying the causal factors, Defining the problem, Developing a hypothesis, Selecting a sample, Collecting data and arriving at generalizations and Conclusions."
+        ],
+        correctOption: "2"
+      },
+      {
+        qNo: 9,
+        page: 5,
+        stem: "The problem of 'research ethics' is concerned with which aspect of research activities ?",
+        statements: [],
+        codePrompt: "Options :",
+        options: [
+          "(1) Following the prescribed format of a thesis",
+          "(2) Data analysis through qualitative or quantitative techniques",
+          "(3) Defining the population of research",
+          "(4) Evidence based research reporting"
+        ],
+        correctOption: "4"
+      },
+      {
+        qNo: 10,
+        page: 5,
+        stem: "In which of the following activities, potential for nurturing creative and critical thinking is relatively greater ?",
+        statements: [],
+        codePrompt: "Options :",
+        options: [
+          "(1) Preparing research summary",
+          "(2) Presenting a seminar paper",
+          "(3) Participation in research conference",
+          "(4) Participation in a workshop"
+        ],
+        correctOption: "3"
+      }
+    ];
+
+// ===================== SMART QUESTION-PAPER PARSER (pure functions) =====================
+// Input  : pages = [{ num, w, h, items:[{ s, x, right, top, bottom }] }]   (PDF points, origin top-left)
+// Output : { questions:[{ qNo, page, segments:[{page,x0,x1,y0,y1}] }], endPage, cols, missing:[] }
+// Works for 1- or 2-column papers, questions that continue into the next column / next page,
+// repeating headers & footers, and stops before the Answer Key / Solutions pages.
+
+function smartDetectChrome(pages) {
+  // Header/footer = text that repeats at the same place on most pages.
+  const counts = new Map();
+  const keyOf = (p, it) => it.s.trim() + "|" + Math.round(it.x / 3) + "|" + Math.round(it.top / 2);
+  pages.forEach(p => {
+    const seen = new Set();
+    p.items.forEach(it => {
+      if (it.top < 0.12 * p.h || it.top > 0.87 * p.h) {
+        const k = keyOf(p, it);
+        if (!seen.has(k)) { seen.add(k); counts.set(k, (counts.get(k) || 0) + 1); }
+      }
+    });
+  });
+  const need = Math.max(2, Math.ceil(pages.length * 0.6));
+  pages.forEach(p => {
+    p.chrome = new Set();
+    p.items.forEach(it => {
+      if ((it.top < 0.12 * p.h || it.top > 0.87 * p.h) && (counts.get(keyOf(p, it)) || 0) >= need) p.chrome.add(it);
+    });
+    p.body = p.items.filter(it => !p.chrome.has(it));
+    const head = [...p.chrome].filter(it => it.top < 0.5 * p.h);
+    const foot = [...p.chrome].filter(it => it.top >= 0.5 * p.h);
+    p.topLimit = head.length ? Math.max(...head.map(it => it.bottom)) + 2 : 0;
+    p.footTop = foot.length ? Math.min(...foot.map(it => it.top)) : p.h;
+  });
+}
+
+function smartFindGutter(pages) {
+  const tol = Math.floor(pages.length * 0.1); // tolerate a few stray items
+  // Find the widest empty vertical strip near the middle of the page across all pages.
+  const w = pages[0].w, step = 0.5, n = Math.ceil(w / step);
+  const cov = new Uint16Array(n + 1);
+  pages.forEach(p => p.body.forEach(it => {
+    if (it.right - it.x > 0.45 * w) return; // ignore full-width lines
+    for (let i = Math.floor(it.x / step); i <= Math.min(n, Math.ceil(it.right / step)); i++) cov[i]++;
+  }));
+  let best = null, runStart = null;
+  const lo = Math.floor(0.3 * w / step), hi = Math.ceil(0.7 * w / step);
+  for (let i = lo; i <= hi; i++) {
+    if (cov[i] <= tol) { if (runStart === null) runStart = i; }
+    else if (runStart !== null) { if (!best || i - runStart > best.len) best = { s: runStart, len: i - runStart }; runStart = null; }
+  }
+  if (runStart !== null && (!best || hi - runStart > best.len)) best = { s: runStart, len: hi - runStart };
+  if (!best || best.len * step < 0.012 * w) return null; // single column paper
+  return { start: best.s * step, end: (best.s + best.len) * step };
+}
+
+function smartPageText(p) {
+  return p.items.map(it => it.s).join(" ");
+}
+
+function smartLayout(allPages) {
+  smartDetectChrome(allPages);
+  // where does the question section end? (an "Answer Key" page; numbering restarts are handled below)
+  let endPage = allPages.length; // exclusive index
+  for (let i = 0; i < allPages.length; i++) {
+    if (/answer\s*key/i.test(smartPageText({ items: allPages[i].body.slice(0, 12) }))) { endPage = i; break; }
+  }
+  const pages = allPages.slice(0, Math.max(1, endPage));
+  const gutter = smartFindGutter(pages);
+  const W = pages[0].w;
+  const colOf = it => (gutter ? ((it.x + it.right) / 2 < (gutter.start + gutter.end) / 2 ? 0 : 1) : 0);
+  const nCols = gutter ? 2 : 1;
+
+  // column x-ranges for cropping
+  const xs = [[Infinity, -Infinity], [Infinity, -Infinity]];
+  pages.forEach(p => p.body.forEach(it => {
+    if (it.right - it.x > 0.45 * W) return;
+    const c = colOf(it); xs[c][0] = Math.min(xs[c][0], it.x); xs[c][1] = Math.max(xs[c][1], it.right);
+  }));
+  const colX = [];
+  if (gutter) {
+    colX.push([Math.max(0, xs[0][0] - 6), gutter.start + 4]);
+    colX.push([gutter.end - 4, Math.min(W, xs[1][1] + 6)]);
+  } else {
+    colX.push([Math.max(0, xs[0][0] - 6), Math.min(W, xs[0][1] + 6)]);
+  }
+
+  const labelRe = /^\s*Q\s?\.?\s?(\d{1,3})(?=$|[\s\.\):])/i;
+
+  // label candidates
+  const cands = [];
+  for (let pi = 0; pi < endPage; pi++) {
+    pages[pi].body.forEach(it => {
+      const m = it.s.match(labelRe);
+      if (m) cands.push({ pi, col: colOf(it), n: +m[1], x: it.x, top: it.top, bottom: it.bottom, it });
+    });
+  }
+  // keep only labels sitting at the left edge of their column (median x of all candidates per column)
+  const med = c => {
+    const v = cands.filter(k => k.col === c).map(k => k.x).sort((a, b) => a - b);
+    return v.length ? v[Math.floor(v.length / 2)] : null;
+  };
+  const medX = [med(0), med(1)];
+  const edge = cands.filter(k => medX[k.col] !== null && Math.abs(k.x - medX[k.col]) <= 0.02 * W);
+
+  // reading order + sequence acceptance (1,2,3...) with small forward jumps tolerated
+  edge.sort((a, b) => a.pi - b.pi || a.col - b.col || a.top - b.top);
+  const accepted = [], missing = [];
+  let expected = 1, cut = pages.length;
+  for (const k of edge) {
+    if (k.n === 1 && accepted.length >= 5) { cut = k.pi; break; }   // numbering restarted (solutions section)
+    if (k.n >= expected && k.n <= expected + 3) {
+      for (let m = expected; m < k.n; m++) missing.push(m);
+      accepted.push(k); expected = k.n + 1;
+    }
+  }
+  endPage = Math.min(endPage, cut);
+  const acceptedSet = new Set(accepted.filter(k => k.pi < endPage));
+
+  // vertical cap = bottom of the lowest body text on question pages (+ small pad), never into the footer
+  let maxBody = 0;
+  for (let pi = 0; pi < endPage; pi++) pages[pi].body.forEach(it => { maxBody = Math.max(maxBody, it.bottom); });
+  const questions = [];
+  let open = null;
+  const PAD = 4, MINH = 6;
+  for (let pi = 0; pi < endPage; pi++) {
+    const p = pages[pi];
+    const cap = Math.min(maxBody + 0.012 * p.h, p.footTop - 2);
+    for (let c = 0; c < nCols; c++) {
+      const body = p.body.filter(it => colOf(it) === c && it.right - it.x <= 0.45 * W).sort((a, b) => a.top - b.top);
+      if (!body.length) continue;
+      const labels = [...acceptedSet].filter(k => k.pi === pi && k.col === c).sort((a, b) => a.top - b.top);
+      const seg = (y0, y1) => ({ page: p.num, col: c, x0: colX[c][0], x1: colX[c][1], y0: Math.max(0, y0), y1 });
+      if (!labels.length) {
+        if (open) open.segments.push(seg(body[0].top - PAD, cap));
+        continue;
+      }
+      const lead = body.filter(it => it.bottom <= labels[0].top - 2);
+      if (open && lead.length && labels[0].top - lead[0].top > MINH) open.segments.push(seg(lead[0].top - PAD, labels[0].top - PAD));
+      labels.forEach((L, i) => {
+        const q = { qNo: L.n, page: p.num, segments: [seg(L.top - PAD, i + 1 < labels.length ? labels[i + 1].top - PAD : cap)] };
+        questions.push(q); open = q;
+      });
+    }
+  }
+  return { questions, endPage, nCols, missing, gutter, colX };
+}
+
+// Answer key: scan pages after the questions for "Q12 (B)" / "12. B" / "12 - 3" pairs.
+function smartAnswerKey(pages, startIdx, total) {
+  const map = { A: "1", B: "2", C: "3", D: "4", "1": "1", "2": "2", "3": "3", "4": "4" };
+  const re = /(?:^|[\s,;])Q?\s*\.?\s*(\d{1,3})\s*[\.\:\-\)]?\s*[\(\[]\s*([A-Da-d1-4])\s*[\)\]]/g;
+  const key = {}, usedPages = [];
+  for (let i = startIdx; i < pages.length; i++) {
+    // read in visual order (row by row, left to right) so "Q12" is followed by its "(B)"
+    const sorted = pages[i].items.slice().sort((a, b) => Math.round(a.top / 4) - Math.round(b.top / 4) || a.x - b.x);
+    const txt = smartPageText({ items: sorted });
+    let m, found = 0;
+    re.lastIndex = 0;
+    while ((m = re.exec(txt)) !== null) {
+      const n = +m[1];
+      if (n >= 1 && n <= total && !(n in key)) { key[n] = map[m[2].toUpperCase()]; found++; }
+    }
+    if (found >= 8) usedPages.push(pages[i].num);
+    else if (usedPages.length) break; // key ended
+  }
+  return { key, usedPages };
+}
+
+if (typeof module !== "undefined") module.exports = { smartLayout, smartAnswerKey };
+
+
+// ===================== PARSE PIPELINE (pdf.js -> layout -> cropped images) =====================
+const AI_RENDER_SCALE = 1.6;     // page image size sent to the AI endpoint
+const CROP_SCALE = 4;            // sharpness of the cropped question images
+
+function setParseProgress(text, frac) {
+  const box = document.getElementById("parseProgressBox");
+  box.classList.remove("hidden");
+  document.getElementById("parseProgressText").textContent = text;
+  const pct = Math.round(Math.max(0, Math.min(1, frac)) * 100);
+  document.getElementById("parseProgressPct").textContent = pct + "%";
+  document.getElementById("parseProgressBar").style.width = pct + "%";
+}
+function hideParseProgress() {
+  document.getElementById("parseProgressBox").classList.add("hidden");
+}
+
+async function extractTextPages(pdfDoc) {
+  const pages = [];
+  const n = pdfDoc.numPages;
+  for (let p = 1; p <= n; p++) {
+    const page = await pdfDoc.getPage(p);
+    const vp = page.getViewport({ scale: 1 });
+    const tc = await page.getTextContent();
+    const items = [];
+    for (const it of tc.items) {
+      if (!it.str || !it.str.trim()) continue;
+      const tx = window.pdfjsLib.Util.transform(vp.transform, it.transform);
+      const fh = Math.hypot(tx[2], tx[3]) || it.height || 10;
+      items.push({ s: it.str, x: tx[4], right: tx[4] + (it.width || 0), top: tx[5] - fh * 0.95, bottom: tx[5] + fh * 0.25 });
+    }
+    pages.push({ num: p, w: vp.width, h: vp.height, items });
+    setParseProgress(`Reading text... page ${p} of ${n}`, 0.02 + 0.2 * (p / n));
+  }
+  return pages;
+}
+
+function findAnswerKeyStart(pages) {
+  for (let i = 0; i < pages.length; i++) {
+    if (/answer\s*key/i.test(pages[i].items.slice(0, 12).map(it => it.s).join(" "))) return i;
+  }
+  return null;
+}
+
+// Optional AI route: sends each page image to YOUR endpoint (see ai-parse-worker.js) and expects
+// { regions: [ { qNo: number|null, bbox: [x0,y0,x1,y1] (fractions 0-1), order: number } ] }
+async function aiParseLayout(pdfDoc, pages, endpoint) {
+  const byQ = new Map();
+  let last = null;
+  for (let p = 1; p <= pdfDoc.numPages; p++) {
+    setParseProgress(`AI is reading page ${p} of ${pdfDoc.numPages}...`, 0.22 + 0.3 * (p / pdfDoc.numPages));
+    const page = await pdfDoc.getPage(p);
+    const vp = page.getViewport({ scale: AI_RENDER_SCALE });
+    const cv = document.createElement("canvas");
+    cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height);
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    const b64 = cv.toDataURL("image/jpeg", 0.85).split(",")[1];
+    const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ page: p, image: b64 }) });
+    if (!res.ok) throw new Error("AI endpoint error " + res.status);
+    const data = await res.json();
+    const pw = pages[p - 1].w, ph = pages[p - 1].h;
+    const regions = (data.regions || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+    for (const r of regions) {
+      if (!r.bbox || r.bbox.length !== 4) continue;
+      const seg = { page: p, col: 0, x0: r.bbox[0] * pw, y0: r.bbox[1] * ph, x1: r.bbox[2] * pw, y1: r.bbox[3] * ph };
+      let q = null;
+      if (r.qNo == null) q = last;
+      else { q = byQ.get(r.qNo); if (!q) { q = { qNo: r.qNo, page: p, segments: [] }; byQ.set(r.qNo, q); } }
+      if (q) { q.segments.push(seg); last = q; }
+    }
+  }
+  const questions = [...byQ.values()].sort((a, b) => a.qNo - b.qNo);
+  return { questions, nCols: 0, missing: [], endPage: pages.length };
+}
+
+function inkRange(ctx, x0, y0, w, h) {
+  const d = ctx.getImageData(x0, y0, w, h).data;
+  let first = -1, last = -1;
+  for (let y = 0; y < h; y++) {
+    const row = y * w * 4;
+    let ink = false;
+    for (let x = 0; x < w; x += 2) {
+      const i = row + x * 4;
+      if (d[i] < 170 && d[i + 1] < 170 && d[i + 2] < 170) { ink = true; break; }
+    }
+    if (ink) { if (first < 0) first = y; last = y; }
+  }
+  return first < 0 ? null : [first, last];
+}
+
+async function renderQuestionImages(pdfDoc, layout) {
+  const S = CROP_SCALE, PADPX = 6, GAP = 8;
+  const byPage = {};
+  layout.questions.forEach(q => q.segments.forEach(s => { (byPage[s.page] = byPage[s.page] || []).push({ q, s }); }));
+  const pageNums = Object.keys(byPage).map(Number).sort((a, b) => a - b);
+  const parts = {}; // qNo -> [canvas]
+  let done = 0;
+  for (const pn of pageNums) {
+    const page = await pdfDoc.getPage(pn);
+    const vp = page.getViewport({ scale: S });
+    const cv = document.createElement("canvas");
+    cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height);
+    const ctx = cv.getContext("2d", { willReadFrequently: true });
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    for (const { q, s } of byPage[pn]) {
+      const x0 = Math.max(0, Math.round(s.x0 * S)), y0 = Math.max(0, Math.round(s.y0 * S));
+      const w = Math.min(cv.width - x0, Math.round((s.x1 - s.x0) * S));
+      const h = Math.min(cv.height - y0, Math.round((s.y1 - s.y0) * S));
+      if (w <= 0 || h <= 0) continue;
+      const r = inkRange(ctx, x0, y0, w, h);
+      if (!r) continue;
+      const t = Math.max(0, r[0] - PADPX), b = Math.min(h - 1, r[1] + PADPX);
+      const part = document.createElement("canvas");
+      part.width = w; part.height = b - t + 1;
+      part.getContext("2d").drawImage(cv, x0, y0 + t, w, part.height, 0, 0, w, part.height);
+      (parts[q.qNo] = parts[q.qNo] || []).push(part);
+    }
+    done++;
+    setParseProgress(`Cutting questions... page ${done} of ${pageNums.length}`, 0.55 + 0.4 * (done / pageNums.length));
+    await new Promise(r => setTimeout(r, 0));
+  }
+  const images = {};
+  const pageOf = {};
+  layout.questions.forEach(q => { pageOf[q.qNo] = q.page; });
+  for (const qNo of Object.keys(parts)) {
+    const list = parts[qNo];
+    const W = Math.max(...list.map(c => c.width));
+    const H = list.reduce((a, c) => a + c.height, 0) + GAP * (list.length - 1);
+    const out = document.createElement("canvas");
+    out.width = W; out.height = H;
+    const octx = out.getContext("2d");
+    octx.fillStyle = "#fff"; octx.fillRect(0, 0, W, H);
+    let y = 0;
+    list.forEach(c => { octx.drawImage(c, 0, y); y += c.height + GAP; });
+    const blob = await new Promise(res => out.toBlob(res, "image/png"));
+    images[qNo] = { url: URL.createObjectURL(blob), w: W, h: H, scale: S, page: pageOf[qNo] || 1 };
+  }
+  return images;
+}
+
+async function parseQuestionPaper(pdfDoc) {
+  const endpoint = (document.getElementById("aiEndpointInput").value || "").trim();
+  const useAi = document.getElementById("aiParseCheckbox").checked && endpoint;
+  setParseProgress("Reading text from PDF...", 0.02);
+  const pages = await extractTextPages(pdfDoc);
+  let layout;
+  if (useAi) {
+    layout = await aiParseLayout(pdfDoc, pages, endpoint);
+  } else {
+    setParseProgress("Finding questions...", 0.25);
+    layout = smartLayout(pages);
+  }
+  if (!layout.questions.length) return null;
+  const images = await renderQuestionImages(pdfDoc, layout);
+  const akStart = useAi ? findAnswerKeyStart(pages) : layout.endPage;
+  const total = Math.max(...layout.questions.map(q => q.qNo));
+  const keyRes = (akStart !== null && akStart < pages.length) ? smartAnswerKey(pages, akStart, total) : { key: {}, usedPages: [] };
+  return { count: total, found: Object.keys(images).length, images, key: keyRes.key, keyPages: keyRes.usedPages, cols: layout.nCols, missing: layout.missing || [], ai: Boolean(useAi) };
+}
+
+    // Helper: Parse fractional or decimal marking input (e.g. "1/3", "1/4", "2/3", "0.25", "2")
+    function parseMarksExpression(rawStr, fallbackVal = 0) {
+      const cleaned = String(rawStr || "").trim().replace(/^[-+]/, "").trim();
+      if (!cleaned) return { value: fallbackVal, label: String(fallbackVal) };
+
+      if (cleaned.includes("/")) {
+        const parts = cleaned.split("/");
+        const num = parseFloat(parts[0]);
+        const den = parseFloat(parts[1]);
+        if (!isNaN(num) && !isNaN(den) && den !== 0) {
+          return {
+            value: Math.abs(num / den),
+            label: `${Math.abs(num)}/${Math.abs(den)}`
+          };
+        }
+      }
+
+      const parsed = parseFloat(cleaned);
+      if (!isNaN(parsed)) {
+        const absVal = Math.abs(parsed);
+        return {
+          value: absVal,
+          label: String(absVal)
+        };
+      }
+      return { value: fallbackVal, label: String(fallbackVal) };
+    }
+
+    // App State
+    const state = {
+      paused: false,
+      wizardStep: 1, // 1: Fetch PDF, 2: Test Settings, 3: Answer Key, 4: Start Exam
+      candidateName: "Your Name",
+      subjectName: "Mock Practice",
+      examTitle: "PAPER NAME",
+      totalQuestions: 100,
+      configuredDurationMinutes: 90,
+      durationSeconds: 5400,
+      timerRunning: false,
+      examStarted: false,
+      examSubmitted: false,
+      fiveMinWarningShown: false,
+      optionFormat: "alpha",
+      positiveMarks: 2.0,
+      positiveMarksLabel: "2",
+      negativeMarks: 1 / 3,
+      negativeMarksLabel: "1/3",
+      currentQuestion: 1,
+      paletteFilter: "all",
+      paletteCollapsed: false,
+      autoSyncPage: false, // Disabled so SAVE & NEXT never changes the PDF page
+      // PDF state
+      pdfMode: "sample", // 'sample' or 'uploaded'
+      pdfDoc: null,
+      pdfFileName: "UGC-NET Paper-I Sample PDF (Built-in)",
+      currentPage: 1,
+      totalPages: 5,
+      zoomScale: 1.0,
+      questionImages: null, // { [qNo]: { url, w, h, scale, page } } when the smart parser worked
+      viewMode: "question", // 'question' (one cropped question) or 'page' (original PDF page)
+      parseInfo: null,
+      endTime: 0,
+      questions: []
+    };
+
+    // Synthesized Audio Alert (Web Audio API) for 5-Minute Warning & Auto-Submit
+    function playAlertChime(type) {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        if (type === "warning") {
+          osc.type = "triangle";
+          osc.frequency.setValueAtTime(587.33, now);
+          osc.frequency.setValueAtTime(880, now + 0.18);
+          gain.gain.setValueAtTime(0.18, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+          osc.start(now);
+          osc.stop(now + 0.55);
+        } else if (type === "submit") {
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(523.25, now);
+          osc.frequency.setValueAtTime(659.25, now + 0.15);
+          osc.frequency.setValueAtTime(783.99, now + 0.30);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+          osc.start(now);
+          osc.stop(now + 0.7);
+        }
+      } catch (e) {
+        // Ignore audio errors if blocked
+      }
+    }
+
+    // Request Full Screen safely
+    function enterFullScreen() {
+      try {
+        const el = document.documentElement;
+        if (!document.fullscreenElement) {
+          if (el.requestFullscreen) {
+            el.requestFullscreen().catch(() => {});
+          } else if (el.webkitRequestFullscreen) {
+            el.webkitRequestFullscreen();
+          } else if (el.msRequestFullscreen) {
+            el.msRequestFullscreen();
+          }
+        }
+      } catch (err) {
+        // Ignore if sandboxed iframe restricts native fullscreen
+      }
+    }
+
+    // Switch Pre-Exam Wizard Step (1 -> 2 -> 3 -> 4)
+    function goToWizardStep(step) {
+      state.wizardStep = step;
+      const step1 = document.getElementById("wizardStep1Pdf");
+      const step2 = document.getElementById("wizardStep2Settings");
+      const step3 = document.getElementById("wizardStep3AnswerKey");
+      const step4 = document.getElementById("wizardStep4Start");
+
+      step1.classList.add("hidden");
+      step2.classList.add("hidden");
+      step2.classList.remove("flex");
+      step3.classList.add("hidden");
+      step3.classList.remove("flex");
+      step4.classList.add("hidden");
+      step4.classList.remove("flex");
+
+      const headings = {
+        1: "Step 1: Fetch Question Paper PDF",
+        2: "Step 2: Apply Test Settings",
+        3: "Step 3: Upload or Setup Answer Key",
+        4: "Step 4: Start Examination"
+      };
+      document.getElementById("wizardMainHeading").textContent = headings[step];
+      document.getElementById("wizardStepBadge").textContent = `Step ${step} of 4`;
+
+      for (let i = 1; i <= 4; i++) {
+        const ind = document.getElementById(`stepIndicator${i}`);
+        if (i === step) {
+          ind.className = "bg-white text-[#1e3a8a] px-2 py-1 rounded text-center truncate shadow-2xs font-extrabold";
+        } else if (i < step) {
+          ind.className = "bg-emerald-500 text-white px-2 py-1 rounded text-center truncate font-bold";
+        } else {
+          ind.className = "bg-white/15 text-white/80 px-2 py-1 rounded text-center truncate";
+        }
+      }
+
+      if (step === 1) {
+        step1.classList.remove("hidden");
+      } else if (step === 2) {
+        document.getElementById("step2LoadedPdfName").textContent =
+          `${state.pdfFileName} (${state.totalPages} Page${state.totalPages > 1 ? "s" : ""})`;
+        document.getElementById("inputCandidateName").value = state.candidateName;
+        document.getElementById("inputSubjectName").value = state.subjectName;
+        document.getElementById("inputExamTitle").value = state.examTitle;
+        document.getElementById("inputTotalQuestions").value = state.totalQuestions;
+        document.getElementById("inputDurationMinutes").value = state.configuredDurationMinutes;
+        document.getElementById("inputOptionFormat").value = state.optionFormat;
+        const sum = document.getElementById("step2ParseSummary");
+        if (state.parseInfo) {
+          const pi = state.parseInfo;
+          const keyed = state.questions.filter(q => q.correctOption).length;
+          sum.innerHTML = `<strong>Smart parser:</strong> ${pi.found} questions cut from the PDF${pi.cols ? ` (${pi.cols}-column layout)` : " (AI)"}; answer key ${keyed ? `read for ${keyed} questions` : "not found"}.` +
+            (pi.missing.length ? ` <span class="text-amber-700 font-semibold">Not detected: Q${pi.missing.join(", Q")}.</span>` : "");
+          sum.classList.remove("hidden");
+        } else {
+          sum.classList.add("hidden");
+        }
+        document.getElementById("inputPositiveMarks").value = state.positiveMarksLabel;
+        document.getElementById("inputNegativeMarks").value = state.negativeMarksLabel;
+        step2.classList.remove("hidden");
+        step2.classList.add("flex");
+      } else if (step === 3) {
+        document.getElementById("answerKeyModalSubtitle").textContent = state.pdfFileName;
+        populateAnswerKeyGrid();
+        step3.classList.remove("hidden");
+        step3.classList.add("flex");
+      } else if (step === 4) {
+        const configuredKeys = state.questions.filter(q => Boolean(q.correctOption)).length;
+        document.getElementById("startModalPaperName").textContent =
+          `${state.pdfFileName} (${state.totalPages} Pages)`;
+        document.getElementById("summaryWizardCandidate").textContent =
+          `${state.candidateName} — ${state.subjectName}`;
+        document.getElementById("summaryWizardConfig").textContent =
+          `${state.totalQuestions} Questions | ${state.configuredDurationMinutes} Mins (+${state.positiveMarksLabel} / -${state.negativeMarksLabel})`;
+        document.getElementById("startModalKeyStatus").textContent =
+          `${configuredKeys} / ${state.totalQuestions} Answers Configured`;
+        document.getElementById("startModalTotalQuestions").value = state.totalQuestions;
+        document.getElementById("startModalDurationMins").value = state.configuredDurationMinutes;
+        step4.classList.remove("hidden");
+        step4.classList.add("flex");
+      }
+    }
+
+    function initQuestionsArray(count) {
+      const existing = state.questions || [];
+      const next = [];
+      const isSample = state.pdfMode === "sample";
+      for (let i = 1; i <= count; i++) {
+        if (existing[i - 1]) {
+          next.push(existing[i - 1]);
+        } else {
+          const sample = isSample ? SAMPLE_QUESTIONS.find(q => q.qNo === i) : null;
+          const parsedPage = state.questionImages && state.questionImages[i] ? state.questionImages[i].page : null;
+          const defaultPage = parsedPage || (sample ? sample.page : Math.min(state.totalPages, Math.ceil(i / Math.max(1, Math.ceil(count / state.totalPages)))));
+          next.push({
+            qNo: i,
+            status: i === 1 ? STATUS_NOT_ANSWERED : STATUS_NOT_VISITED,
+            selectedOption: null,
+            // no invented answers: the key stays empty until it is read from the PDF / uploaded / entered
+            correctOption: sample ? sample.correctOption : "",
+            linkedPage: defaultPage
+          });
+        }
+      }
+      state.questions = next;
+    }
+
+    // Toast helper
+    let toastTimer = null;
+    function showToast(msg) {
+      const toast = document.getElementById("toastMessage");
+      const text = document.getElementById("toastText");
+      text.textContent = msg;
+      toast.classList.remove("hidden");
+      toast.classList.add("flex");
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toast.classList.add("hidden");
+        toast.classList.remove("flex");
+      }, 3200);
+    }
+
+    // Format seconds to HH:MM:SS
+    function formatTime(sec) {
+      const s = Math.max(0, Math.floor(sec));
+      const hrs = String(Math.floor(s / 3600)).padStart(2, "0");
+      const mins = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+      const secs = String(s % 60).padStart(2, "0");
+      return `${hrs}:${mins}:${secs}`;
+    }
+
+    function updateTimerVisualStyle() {
+      const timerEl = document.getElementById("timerDisplay");
+      if (state.durationSeconds <= 300 && state.durationSeconds > 0 && state.examStarted) {
+        timerEl.className = "bg-red-600 text-white font-extrabold px-3 py-1 sm:px-6 sm:py-2 rounded-full text-lg sm:text-2xl tracking-wider shadow-inner animate-pulse";
+      } else {
+        timerEl.className = "bg-[#0088cc] text-white font-bold px-3 py-1 sm:px-6 sm:py-2 rounded-full text-lg sm:text-2xl tracking-wider shadow-inner";
+      }
+    }
+
+    function triggerFiveMinuteWarning() {
+      if (state.fiveMinWarningShown) return;
+      state.fiveMinWarningShown = true;
+      playAlertChime("warning");
+
+      const banner = document.getElementById("fiveMinWarningBanner");
+      banner.classList.remove("hidden");
+      banner.classList.add("flex");
+
+      const modal = document.getElementById("fiveMinWarningModal");
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+
+      showToast("⚠️ Warning: Only 5 minutes remaining!");
+    }
+
+    function setPaused(paused) {
+      if (!state.examStarted || state.examSubmitted) return;
+      if (paused === state.paused) return;
+      state.paused = paused;
+      const overlay = document.getElementById("pauseOverlay");
+      if (paused) {
+        state.durationSeconds = Math.max(0, Math.round((state.endTime - Date.now()) / 1000));
+        state.timerRunning = false;
+        document.getElementById("timerDisplay").textContent = formatTime(state.durationSeconds);
+        document.getElementById("pauseTimeLeft").textContent = formatTime(state.durationSeconds);
+        overlay.classList.remove("hidden");
+        overlay.classList.add("flex");
+      } else {
+        state.endTime = Date.now() + state.durationSeconds * 1000;
+        state.timerRunning = true;
+        overlay.classList.add("hidden");
+        overlay.classList.remove("flex");
+      }
+      document.getElementById("pauseBtnIcon").textContent = paused ? "▶" : "⏸";
+      document.getElementById("pauseBtnText").textContent = paused ? "Resume" : "Pause";
+    }
+
+    function resetPauseUi() {
+      keepAwake(false);
+      state.paused = false;
+      const overlay = document.getElementById("pauseOverlay");
+      overlay.classList.add("hidden");
+      overlay.classList.remove("flex");
+      document.getElementById("pauseBtnIcon").textContent = "⏸";
+      document.getElementById("pauseBtnText").textContent = "Pause";
+      const btn = document.getElementById("pauseTestBtn");
+      btn.classList.add("hidden");
+      btn.classList.remove("flex");
+    }
+
+    let timerInterval = null;
+    function startTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        if (!state.timerRunning || state.examSubmitted) return;
+
+        if (state.durationSeconds > 0) {
+          // wall-clock based, so a sleeping/throttled tab can never make the timer drift
+          state.durationSeconds = Math.max(0, Math.round((state.endTime - Date.now()) / 1000));
+          document.getElementById("timerDisplay").textContent = formatTime(state.durationSeconds);
+          updateTimerVisualStyle();
+
+          // Trigger warning when 5 minutes (300 seconds) remain
+          if (state.durationSeconds <= 300 && state.durationSeconds > 0) {
+            triggerFiveMinuteWarning();
+          }
+        }
+
+        // Auto-submit when timer exhausts (00:00:00)
+        if (state.durationSeconds <= 0) {
+          state.durationSeconds = 0;
+          state.timerRunning = false;
+          state.examSubmitted = true;
+          resetPauseUi();
+          document.getElementById("timerDisplay").textContent = "00:00:00";
+          playAlertChime("submit");
+
+          const fiveModal = document.getElementById("fiveMinWarningModal");
+          fiveModal.classList.add("hidden");
+          fiveModal.classList.remove("flex");
+
+          showToast("⏰ Time Exhausted! Examination has been automatically submitted.");
+          openSubmitModal(true);
+        }
+      }, 1000);
+    }
+
+    // Render Header & Metadata
+    function renderHeaderInfo() {
+      document.getElementById("displayCandidateName").textContent = `[${state.candidateName}]`;
+      document.getElementById("displaySubjectName").textContent = `[${state.subjectName}]`;
+      document.getElementById("examHeaderTitle").textContent = state.examTitle;
+      document.getElementById("timerDisplay").textContent = formatTime(state.durationSeconds);
+      updateTimerVisualStyle();
+      document.getElementById("activePaperBadge").textContent = state.pdfFileName;
+      document.getElementById("pdfPageCountBadge").textContent = `${state.totalPages} Page${state.totalPages > 1 ? "s" : ""}`;
+      document.getElementById("examLiveBadge").textContent = state.examStarted ? "LIVE" : "SETUP";
+      document.getElementById("marksBadge").textContent = `+${state.positiveMarksLabel} / -${state.negativeMarksLabel} Marks`;
+
+      const labels = document.querySelectorAll(".option-label-text");
+      const alpha = ["A)", "B)", "C)", "D)"];
+      const numeric = ["1)", "2)", "3)", "4)"];
+      labels.forEach((el, idx) => {
+        el.textContent = state.optionFormat === "alpha" ? alpha[idx] : numeric[idx];
+      });
+    }
+
+    // Render Built-in Sample Question Paper or Uploaded PDF Canvas (Only changes page when user clicks Next/Prev Page!)
+    async function renderPdfOrSampleView() {
+      const sampleSheet = document.getElementById("sampleQuestionSheet");
+      const pdfCanvasContainer = document.getElementById("pdfCanvasContainer");
+      const pageInput = document.getElementById("pdfPageInput");
+      const totalPagesText = document.getElementById("pdfTotalPagesText");
+      const zoomLevelText = document.getElementById("zoomLevelText");
+
+      pageInput.value = state.currentPage;
+      pageInput.max = state.totalPages;
+      totalPagesText.textContent = state.totalPages;
+      zoomLevelText.textContent = `${Math.round(state.zoomScale * 100)}%`;
+      document.getElementById("pinQuestionLabel").textContent = `Q.${String(state.currentQuestion).padStart(2, "0")}`;
+      document.getElementById("pinPageNumberLabel").textContent = state.currentPage;
+      document.getElementById("questionPageLinkBadge").textContent = `(Viewing PDF Page ${state.currentPage} of ${state.totalPages})`;
+
+      // ---- One-question-per-screen mode (cropped images from the smart parser) ----
+      const qWrap = document.getElementById("questionImageWrap");
+      const toggleBtn = document.getElementById("toggleViewModeBtn");
+      const navGroup = document.getElementById("pdfPageNavGroup");
+      const pageBtnGroup = document.getElementById("dedicatedPageBtnGroup");
+      const hasImages = Boolean(state.questionImages);
+      toggleBtn.classList.toggle("hidden", !hasImages);
+      if (hasImages && state.viewMode === "question") {
+        sampleSheet.classList.add("hidden");
+        pdfCanvasContainer.classList.add("hidden");
+        pdfCanvasContainer.classList.remove("flex");
+        qWrap.classList.remove("hidden");
+        qWrap.classList.add("flex");
+        navGroup.classList.add("hidden");
+        pageBtnGroup.classList.add("hidden");
+        toggleBtn.textContent = "Full PDF Page";
+        const info = state.questionImages[state.currentQuestion];
+        const img = document.getElementById("questionImage");
+        const missing = document.getElementById("questionImageMissing");
+        if (info) {
+          if (img.dataset.src !== info.url) { img.src = info.url; img.dataset.src = info.url; }
+          img.classList.remove("hidden");
+          missing.classList.add("hidden");
+          const base = (info.w / info.scale) * 2.8; // CSS px per PDF point
+          img.style.width = `${Math.round(base * state.zoomScale)}px`;
+          img.style.maxWidth = state.zoomScale <= 1 ? "100%" : "none";
+          document.getElementById("questionPageLinkBadge").textContent = `(From PDF page ${info.page})`;
+        } else {
+          img.classList.add("hidden");
+          img.removeAttribute("src"); img.dataset.src = "";
+          missing.classList.remove("hidden");
+        }
+        return;
+      }
+      qWrap.classList.add("hidden");
+      qWrap.classList.remove("flex");
+      navGroup.classList.remove("hidden");
+      pageBtnGroup.classList.remove("hidden");
+      toggleBtn.textContent = "Back to Question";
+
+      if (state.pdfMode === "uploaded" && state.pdfDoc) {
+        sampleSheet.classList.add("hidden");
+        pdfCanvasContainer.classList.remove("hidden");
+        pdfCanvasContainer.classList.add("flex");
+
+        try {
+          const page = await state.pdfDoc.getPage(state.currentPage);
+          const canvas = document.getElementById("pdfRenderCanvas");
+          const ctx = canvas.getContext("2d");
+          const baseScale = 1.35 * state.zoomScale;
+          const viewport = page.getViewport({ scale: baseScale });
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+          await page.render({ canvasContext: ctx, viewport }).promise;
+        } catch (err) {
+          showToast("Error rendering PDF page.");
+        }
+      } else {
+        pdfCanvasContainer.classList.add("hidden");
+        pdfCanvasContainer.classList.remove("flex");
+        sampleSheet.classList.remove("hidden");
+        sampleSheet.style.transform = `scale(${state.zoomScale})`;
+
+        const pageQuestions = SAMPLE_QUESTIONS.filter(q => q.page === state.currentPage);
+        const questionsToRender = pageQuestions.length > 0 ? pageQuestions : [
+          {
+            qNo: (state.currentPage - 1) * 2 + 1,
+            page: state.currentPage,
+            stem: `Question ${(state.currentPage - 1) * 2 + 1} on PDF Page ${state.currentPage}. Use the "NEXT PDF PAGE ▶" button when you want to turn the page.`,
+            statements: [],
+            codePrompt: "Options :",
+            options: ["(1) Option 1", "(2) Option 2", "(3) Option 3", "(4) Option 4"]
+          }
+        ];
+
+        const blocksHtml = questionsToRender.map(sampleQ => {
+          const isCurrent = sampleQ.qNo === state.currentQuestion;
+          const statementsHtml = sampleQ.statements && sampleQ.statements.length
+            ? `<div class="mt-2.5 space-y-1 pl-1 font-serif text-[15px] text-gray-900">
+                ${sampleQ.statements.map(st => `<div class="whitespace-pre-wrap">${escapeHtml(st)}</div>`).join("")}
+              </div>`
+            : "";
+
+          const optionsInlineHtml = sampleQ.options
+            .map(opt => `<span class="inline-block mr-6 mb-1 font-serif text-[15px]">${escapeHtml(opt)}</span>`)
+            .join("");
+
+          return `
+            <div class="p-4 rounded-lg border ${isCurrent ? "border-blue-400 bg-blue-50/20" : "border-gray-200"} mb-4 last:mb-0">
+              <div class="font-serif font-bold text-[15px] text-[#1e3a8a] mb-1">
+                Question No. ${String(sampleQ.qNo).padStart(2, "0")}
+              </div>
+              <div class="font-serif text-[16px] text-gray-900 leading-relaxed whitespace-pre-line">${escapeHtml(sampleQ.stem)}</div>
+              ${statementsHtml}
+              <div class="mt-2.5 font-serif font-bold text-[15px] text-gray-900">${escapeHtml(sampleQ.codePrompt || "Code :")}</div>
+              <div class="mt-1 flex flex-wrap items-center text-gray-900">
+                ${optionsInlineHtml}
+              </div>
+            </div>
+          `;
+        }).join("");
+
+        sampleSheet.innerHTML = `
+          <div class="border-b border-gray-200 pb-2 mb-4 flex items-center justify-between text-xs text-gray-500">
+            <span><strong>${escapeHtml(state.examTitle)}</strong> — Question Paper PDF (Page ${state.currentPage} of ${state.totalPages})</span>
+            <span>Use "NEXT PDF PAGE ▶" to turn page</span>
+          </div>
+          ${blocksHtml}
+        `;
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    // Render Current Question Radio Selection & Header (Includes Question No. before Options!)
+    function renderCurrentQuestionState() {
+      const qObj = state.questions[state.currentQuestion - 1];
+      if (!qObj) return;
+
+      const formattedQNo = String(state.currentQuestion).padStart(2, "0");
+      document.getElementById("currentQuestionHeader").textContent = `Question No. ${formattedQNo}`;
+      document.getElementById("optionRowQuestionNo").textContent = `Question No. ${formattedQNo} :`;
+      document.getElementById("pinQuestionLabel").textContent = `Q.${formattedQNo}`;
+
+      const radios = document.querySelectorAll('input[name="ntaOption"]');
+      radios.forEach(r => {
+        r.checked = qObj.selectedOption === r.value;
+        r.disabled = state.examSubmitted;
+      });
+
+      const statusTextEl = document.getElementById("selectedOptionStatus");
+      if (state.examSubmitted) {
+        statusTextEl.textContent = "Exam Submitted (Responses Locked)";
+        statusTextEl.className = "font-bold text-red-600";
+      } else if (qObj.selectedOption) {
+        const labelText = state.optionFormat === "alpha"
+          ? ["A", "B", "C", "D"][Number(qObj.selectedOption) - 1]
+          : qObj.selectedOption;
+        statusTextEl.textContent = `Q.${formattedQNo} Selected Option: (${labelText})`;
+        statusTextEl.className = "font-bold text-emerald-700";
+      } else {
+        statusTextEl.textContent = `Q.${formattedQNo}: No option selected`;
+        statusTextEl.className = "font-medium text-gray-500";
+      }
+    }
+
+    // Render Right-Side Question Palette & Status Legend Counts
+    function renderPaletteAndCounts() {
+      let cNotVisited = 0;
+      let cNotAnswered = 0;
+      let cAnswered = 0;
+      let cReview = 0;
+      let cAnsweredReview = 0;
+
+      state.questions.forEach(q => {
+        if (q.status === STATUS_NOT_VISITED) cNotVisited++;
+        else if (q.status === STATUS_NOT_ANSWERED) cNotAnswered++;
+        else if (q.status === STATUS_ANSWERED) cAnswered++;
+        else if (q.status === STATUS_REVIEW) cReview++;
+        else if (q.status === STATUS_ANSWERED_REVIEW) cAnsweredReview++;
+      });
+
+      document.getElementById("countNotVisited").textContent = cNotVisited;
+      document.getElementById("countNotAnswered").textContent = cNotAnswered;
+      document.getElementById("countAnswered").textContent = cAnswered;
+      document.getElementById("countReview").textContent = cReview;
+      document.getElementById("countAnsweredReview").textContent = cAnsweredReview;
+
+      const grid = document.getElementById("questionPaletteGrid");
+      grid.innerHTML = "";
+
+      const statusClassMap = {
+        [STATUS_NOT_VISITED]: "status-not-visited",
+        [STATUS_NOT_ANSWERED]: "status-not-answered",
+        [STATUS_ANSWERED]: "status-answered",
+        [STATUS_REVIEW]: "status-review",
+        [STATUS_ANSWERED_REVIEW]: "status-answered-review"
+      };
+
+      state.questions.forEach(q => {
+        if (state.paletteFilter !== "all" && String(q.status) !== state.paletteFilter) {
+          return;
+        }
+        const btn = document.createElement("button");
+        btn.type = "button";
+        const activeClass = q.qNo === state.currentQuestion ? "active-question" : "";
+        btn.className = `nta-badge ${statusClassMap[q.status]} ${activeClass} h-8 w-full text-xs`;
+        btn.textContent = String(q.qNo).padStart(2, "0");
+        btn.addEventListener("click", () => goToQuestion(q.qNo));
+        grid.appendChild(btn);
+      });
+    }
+
+    function openPalette() {
+      document.getElementById("rightPalettePane").classList.add("open");
+      document.getElementById("paletteBackdrop").classList.add("open");
+    }
+    function closePalette() {
+      document.getElementById("rightPalettePane").classList.remove("open");
+      document.getElementById("paletteBackdrop").classList.remove("open");
+    }
+
+    // Keep the phone screen on during the exam
+    let wakeLock = null;
+    async function keepAwake(on) {
+      try {
+        if (on && "wakeLock" in navigator) {
+          if (!wakeLock) {
+            wakeLock = await navigator.wakeLock.request("screen");
+            wakeLock.addEventListener("release", () => { wakeLock = null; });
+          }
+        } else if (!on && wakeLock) {
+          await wakeLock.release();
+          wakeLock = null;
+        }
+      } catch (e) { /* not supported or denied */ }
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && state.examStarted && !state.examSubmitted) keepAwake(true);
+    });
+    window.addEventListener("beforeunload", (e) => {
+      if (state.examStarted && !state.examSubmitted) { e.preventDefault(); e.returnValue = ""; }
+    });
+
+    // Navigate to a specific question number WITHOUT changing the PDF page
+    function goToQuestion(qNo) {
+      closePalette();
+      const target = Math.max(1, Math.min(state.totalQuestions, qNo));
+      state.currentQuestion = target;
+      const qObj = state.questions[target - 1];
+      if (qObj && qObj.status === STATUS_NOT_VISITED && !state.examSubmitted) {
+        qObj.status = STATUS_NOT_ANSWERED;
+      }
+      if (state.questionImages) state.viewMode = "question";
+      renderCurrentQuestionState();
+      renderPaletteAndCounts();
+      if (state.pdfMode === "sample" || state.questionImages) {
+        renderPdfOrSampleView();
+        const vpc = document.getElementById("pdfViewportContainer");
+        if (vpc) vpc.scrollTop = 0;
+      }
+    }
+
+    // Dedicated PDF Page Navigation Functions
+    function goToPrevPdfPage() {
+      if (state.currentPage > 1) {
+        state.currentPage--;
+        renderPdfOrSampleView();
+      } else {
+        showToast("Already on the first PDF page.");
+      }
+    }
+
+    function goToNextPdfPage() {
+      if (state.currentPage < state.totalPages) {
+        state.currentPage++;
+        renderPdfOrSampleView();
+      } else {
+        showToast("Already on the last PDF page.");
+      }
+    }
+
+    function getCheckedRadioValue() {
+      const checked = document.querySelector('input[name="ntaOption"]:checked');
+      return checked ? checked.value : null;
+    }
+
+    // NTA Action Buttons Logic (Advances Question No. without changing PDF page)
+    function handleSaveAndNext() {
+      if (state.examSubmitted) return;
+      const chosen = getCheckedRadioValue();
+      const qObj = state.questions[state.currentQuestion - 1];
+      if (!chosen) {
+        qObj.selectedOption = null;
+        qObj.status = STATUS_NOT_ANSWERED;
+        showToast("Please select an option to save, or use NEXT >> to skip.");
+      } else {
+        qObj.selectedOption = chosen;
+        qObj.status = STATUS_ANSWERED;
+      }
+      const nextQ = state.currentQuestion < state.totalQuestions ? state.currentQuestion + 1 : 1;
+      goToQuestion(nextQ);
+    }
+
+    function handleSaveAndMarkReview() {
+      if (state.examSubmitted) return;
+      const chosen = getCheckedRadioValue();
+      const qObj = state.questions[state.currentQuestion - 1];
+      if (!chosen) {
+        showToast("Please select an option first to 'Save & Mark for Review'.");
+        return;
+      }
+      qObj.selectedOption = chosen;
+      qObj.status = STATUS_ANSWERED_REVIEW;
+      const nextQ = state.currentQuestion < state.totalQuestions ? state.currentQuestion + 1 : 1;
+      goToQuestion(nextQ);
+    }
+
+    function handleClearResponse() {
+      if (state.examSubmitted) return;
+      const qObj = state.questions[state.currentQuestion - 1];
+      qObj.selectedOption = null;
+      qObj.status = STATUS_NOT_ANSWERED;
+      const radios = document.querySelectorAll('input[name="ntaOption"]');
+      radios.forEach(r => { r.checked = false; });
+      renderCurrentQuestionState();
+      renderPaletteAndCounts();
+      showToast(`Cleared response for Question ${String(state.currentQuestion).padStart(2, "0")}.`);
+    }
+
+    function handleMarkReviewAndNext() {
+      if (state.examSubmitted) return;
+      const chosen = getCheckedRadioValue();
+      const qObj = state.questions[state.currentQuestion - 1];
+      if (chosen) {
+        qObj.selectedOption = chosen;
+        qObj.status = STATUS_ANSWERED_REVIEW;
+      } else {
+        qObj.selectedOption = null;
+        qObj.status = STATUS_REVIEW;
+      }
+      const nextQ = state.currentQuestion < state.totalQuestions ? state.currentQuestion + 1 : 1;
+      goToQuestion(nextQ);
+    }
+
+    // STEP 1 -> STEP 2: Load an uploaded Question Paper PDF, split it into questions, advance to Test Settings
+    async function loadPdfFile(file) {
+      if (!file) return;
+      if (!window.pdfjsLib) {
+        showToast("PDF.js library is still loading. Please try again in a moment.");
+        return;
+      }
+      try {
+        setParseProgress(`Opening "${file.name}"...`, 0.01);
+        const arrayBuffer = await file.arrayBuffer();
+        const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdfDoc = await loadingTask.promise;
+
+        if (state.questionImages) Object.values(state.questionImages).forEach(i => URL.revokeObjectURL(i.url));
+        state.pdfDoc = pdfDoc;
+        state.pdfMode = "uploaded";
+        state.pdfFileName = file.name;
+        state.totalPages = pdfDoc.numPages;
+        state.currentPage = 1;
+        state.questionImages = null;
+        state.parseInfo = null;
+        state.viewMode = "question";
+        state.questions = [];
+        if (state.examTitle === "PAPER NAME") {
+          state.examTitle = file.name.replace(/\.pdf$/i, "").replace(/[_]+/g, " ").trim() || "PAPER NAME";
+        }
+
+        let result = null;
+        try {
+          result = await parseQuestionPaper(pdfDoc);
+        } catch (err) {
+          console.error("Smart parse failed", err);
+        }
+        hideParseProgress();
+
+        if (result && result.found >= 3) {
+          state.questionImages = result.images;
+          state.parseInfo = result;
+          state.totalQuestions = Math.min(300, result.count);
+          initQuestionsArray(state.totalQuestions);
+          let applied = 0;
+          state.questions.forEach(q => {
+            if (result.key[q.qNo]) { q.correctOption = result.key[q.qNo]; applied++; }
+          });
+          const st = document.getElementById("uploadedKeyFileStatus");
+          if (applied > 0) {
+            st.textContent = `✓ Auto-detected ${applied} answers from PDF page${result.keyPages.length > 1 ? "s" : ""} ${result.keyPages.join(", ")}. Verify below, or upload a different key.`;
+            st.className = "text-[11px] font-bold text-emerald-700";
+          } else {
+            st.textContent = "No answer key found inside the PDF. Upload a key file, paste answers, or pick them below.";
+            st.className = "text-[11px] text-blue-800";
+          }
+          showToast(`Detected ${result.found} questions${applied ? ` and ${applied} answers` : ""}. Step 2: Apply Test Settings.`);
+        } else {
+          initQuestionsArray(state.totalQuestions);
+          showToast("Could not split this PDF into questions automatically. You will see full PDF pages instead (or try the AI option).");
+        }
+
+        renderHeaderInfo();
+        goToWizardStep(2);
+      } catch (err) {
+        hideParseProgress();
+        console.error(err);
+        showToast("Could not parse PDF file. Please ensure it is a valid PDF.");
+      }
+    }
+
+    // Parse text extracted from an Answer Key file (.pdf, .txt, .csv, .json)
+    function parseAnswerKeyTextAndApply(rawText, sourceName) {
+      const mapOption = {
+        "1": "1", "2": "2", "3": "3", "4": "4",
+        "A": "1", "B": "2", "C": "3", "D": "4",
+        "(1)": "1", "(2)": "2", "(3)": "3", "(4)": "4",
+        "(A)": "1", "(B)": "2", "(C)": "3", "(D)": "4"
+      };
+
+      let appliedCount = 0;
+      const pairRegex = /(?:Q(?:uestion)?\s*\.?\s*)?(\d{1,3})\s*[\.:\-\)\s]+\s*\(?([1-4A-Da-d])\)?(?=\s|,|;|$)/g;
+      let match;
+      const explicitMatches = {};
+      while ((match = pairRegex.exec(rawText)) !== null) {
+        const qNum = parseInt(match[1], 10);
+        const optChar = match[2].toUpperCase();
+        if (qNum >= 1 && qNum <= state.totalQuestions && mapOption[optChar]) {
+          explicitMatches[qNum] = mapOption[optChar];
+        }
+      }
+
+      if (Object.keys(explicitMatches).length >= 3) {
+        Object.keys(explicitMatches).forEach(qNumStr => {
+          const idx = parseInt(qNumStr, 10) - 1;
+          if (state.questions[idx]) {
+            state.questions[idx].correctOption = explicitMatches[qNumStr];
+            appliedCount++;
+          }
+        });
+      } else {
+        const tokens = rawText.trim().split(/[\s,;|\r\n]+/).map(t => t.trim().toUpperCase());
+        tokens.forEach((tok, idx) => {
+          if (idx < state.questions.length && mapOption[tok]) {
+            state.questions[idx].correctOption = mapOption[tok];
+            appliedCount++;
+          }
+        });
+      }
+
+      populateAnswerKeyGrid();
+      const statusEl = document.getElementById("uploadedKeyFileStatus");
+      if (appliedCount > 0) {
+        statusEl.textContent = `✓ Loaded ${appliedCount} answers from "${sourceName}". Verify below and click Proceed to Start Examination.`;
+        statusEl.className = "text-[11px] font-bold text-emerald-700";
+        showToast(`Applied ${appliedCount} answers from "${sourceName}".`);
+      } else {
+        statusEl.textContent = `Could not auto-detect option pairs in "${sourceName}". Please paste or select answers below.`;
+        statusEl.className = "text-[11px] font-semibold text-amber-700";
+        showToast("Please verify or select answers in the grid.");
+      }
+    }
+
+    async function handleAnswerKeyFileUpload(file) {
+      if (!file) return;
+      try {
+        if (file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf") {
+          if (!window.pdfjsLib) {
+            showToast("PDF.js is not ready yet.");
+            return;
+          }
+          showToast(`Extracting Answer Key from "${file.name}"...`);
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+          let fullText = "";
+          for (let p = 1; p <= pdf.numPages; p++) {
+            const page = await pdf.getPage(p);
+            const content = await page.getTextContent();
+            const pageText = content.items.map(item => item.str).join(" ");
+            fullText += " " + pageText;
+          }
+          parseAnswerKeyTextAndApply(fullText, file.name);
+        } else {
+          const text = await file.text();
+          parseAnswerKeyTextAndApply(text, file.name);
+        }
+      } catch (err) {
+        showToast("Could not read Answer Key file. You can also paste keys or select them manually.");
+      }
+    }
+
+    function populateAnswerKeyGrid() {
+      const container = document.getElementById("answerKeyGridContainer");
+      container.innerHTML = "";
+      const labels = state.optionFormat === "alpha" ? ["A", "B", "C", "D"] : ["1", "2", "3", "4"];
+
+      state.questions.forEach(q => {
+        const item = document.createElement("div");
+        item.className = "flex items-center justify-between bg-white border border-gray-200 rounded px-2 py-1";
+        const select = document.createElement("select");
+        select.className = "border border-gray-300 rounded px-1.5 py-0.5 text-xs font-bold text-blue-700";
+        select.dataset.qno = q.qNo;
+
+        const noneOpt = document.createElement("option");
+        noneOpt.value = "";
+        noneOpt.textContent = "-";
+        select.appendChild(noneOpt);
+
+        ["1", "2", "3", "4"].forEach((val, idx) => {
+          const opt = document.createElement("option");
+          opt.value = val;
+          opt.textContent = labels[idx];
+          if (q.correctOption === val) opt.selected = true;
+          select.appendChild(opt);
+        });
+
+        select.addEventListener("change", (e) => {
+          q.correctOption = e.target.value;
+        });
+
+        const labelSpan = document.createElement("span");
+        labelSpan.className = "font-semibold text-gray-700";
+        labelSpan.textContent = `Q.${String(q.qNo).padStart(2, "0")}`;
+
+        item.appendChild(labelSpan);
+        item.appendChild(select);
+        container.appendChild(item);
+      });
+    }
+
+    // STEP 4 -> LAUNCH FULL-SCREEN EXAM
+    function launchExamination(customDurationSeconds) {
+      const declared = document.getElementById("declarationCheckbox").checked;
+      if (!declared) {
+        showToast("Please check the declaration box before starting the examination.");
+        return;
+      }
+
+      // Reset question attempt states while preserving configured Answer Key
+      initQuestionsArray(state.totalQuestions);
+      state.questions.forEach((q, idx) => {
+        q.selectedOption = null;
+        q.status = idx === 0 ? STATUS_NOT_ANSWERED : STATUS_NOT_VISITED;
+      });
+
+      state.currentQuestion = 1;
+      state.currentPage = 1;
+      state.durationSeconds = typeof customDurationSeconds === "number"
+        ? customDurationSeconds
+        : (state.configuredDurationMinutes * 60);
+      state.fiveMinWarningShown = false;
+      state.examStarted = true;
+      state.examSubmitted = false;
+      state.timerRunning = true;
+      state.endTime = Date.now() + state.durationSeconds * 1000;
+      state.viewMode = "question";
+      resetPauseUi();
+      keepAwake(true);
+      document.getElementById("pauseTestBtn").classList.remove("hidden");
+      document.getElementById("pauseTestBtn").classList.add("flex");
+
+      // Hide 5-minute warning banner if previously shown
+      const banner = document.getElementById("fiveMinWarningBanner");
+      banner.classList.add("hidden");
+      banner.classList.remove("flex");
+
+      // Hide Pre-Exam Wizard and Show ONLY the Clean Exam Workspace (Question Paper + Answer Palette)
+      document.getElementById("preExamWizardScreen").classList.add("hidden");
+      const workspace = document.getElementById("examMainWorkspace");
+      workspace.classList.remove("hidden");
+      workspace.classList.add("flex");
+
+      // Request Full Screen mode
+      enterFullScreen();
+
+      renderHeaderInfo();
+      renderCurrentQuestionState();
+      renderPaletteAndCounts();
+      renderPdfOrSampleView();
+      startTimer();
+
+      showToast("Examination started in Full Screen mode!");
+    }
+
+    // Submit & Result Evaluation Modal
+    function openSubmitModal(isAutoSubmitted = false) {
+      let cNotVisited = 0, cNotAnswered = 0, cAnswered = 0, cReview = 0, cAnsweredReview = 0;
+      let correctCount = 0, wrongCount = 0;
+
+      state.timerRunning = false;
+      renderHeaderInfo();
+
+      const autoBanner = document.getElementById("autoSubmitAlertBanner");
+      if (isAutoSubmitted) {
+        autoBanner.classList.remove("hidden");
+        autoBanner.classList.add("flex");
+      } else {
+        autoBanner.classList.add("hidden");
+        autoBanner.classList.remove("flex");
+      }
+
+      const tbody = document.getElementById("resultTableBody");
+      tbody.innerHTML = "";
+
+      const statusNames = {
+        [STATUS_NOT_VISITED]: "Not Visited",
+        [STATUS_NOT_ANSWERED]: "Not Answered",
+        [STATUS_ANSWERED]: "Answered",
+        [STATUS_REVIEW]: "Marked for Review",
+        [STATUS_ANSWERED_REVIEW]: "Answered & Marked"
+      };
+
+      const formatOpt = (val) => {
+        if (!val) return "—";
+        return state.optionFormat === "alpha" ? ["A", "B", "C", "D"][Number(val) - 1] : val;
+      };
+
+      state.questions.forEach(q => {
+        if (q.status === STATUS_NOT_VISITED) cNotVisited++;
+        else if (q.status === STATUS_NOT_ANSWERED) cNotAnswered++;
+        else if (q.status === STATUS_ANSWERED) cAnswered++;
+        else if (q.status === STATUS_REVIEW) cReview++;
+        else if (q.status === STATUS_ANSWERED_REVIEW) cAnsweredReview++;
+
+        const isEvaluated = (q.status === STATUS_ANSWERED || q.status === STATUS_ANSWERED_REVIEW) && q.selectedOption;
+        let resultBadge = `<span class="text-gray-400">Unattempted</span>`;
+
+        if (isEvaluated) {
+          if (q.correctOption && q.selectedOption === q.correctOption) {
+            correctCount++;
+            resultBadge = `<span class="text-emerald-700 font-bold">✓ Correct (+${state.positiveMarksLabel})</span>`;
+          } else if (q.correctOption) {
+            wrongCount++;
+            resultBadge = `<span class="text-red-600 font-bold">✗ Wrong (-${state.negativeMarksLabel})</span>`;
+          } else {
+            resultBadge = `<span class="text-blue-600">Recorded (No Key)</span>`;
+          }
+        }
+
+        const tr = document.createElement("tr");
+        tr.className = "hover:bg-gray-50";
+        tr.innerHTML = `
+          <td class="py-1.5 px-3 font-bold">Q.${String(q.qNo).padStart(2, "0")}</td>
+          <td class="py-1.5 px-3">${statusNames[q.status]}</td>
+          <td class="py-1.5 px-3 font-semibold">${formatOpt(q.selectedOption)}</td>
+          <td class="py-1.5 px-3 font-semibold text-blue-700">${formatOpt(q.correctOption)}</td>
+          <td class="py-1.5 px-3">${resultBadge}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      const totalScore = (correctCount * state.positiveMarks) - (wrongCount * state.negativeMarks);
+      const maxScore = +(state.totalQuestions * state.positiveMarks).toFixed(2);
+      const totalEvaluated = correctCount + wrongCount;
+      const accuracy = totalEvaluated > 0 ? Math.round((correctCount / totalEvaluated) * 100) : 0;
+
+      document.getElementById("summaryNotVisited").textContent = cNotVisited;
+      document.getElementById("summaryNotAnswered").textContent = cNotAnswered;
+      document.getElementById("summaryAnswered").textContent = cAnswered;
+      document.getElementById("summaryReview").textContent = cReview;
+      document.getElementById("summaryAnsweredReview").textContent = cAnsweredReview;
+
+      document.getElementById("scoreTotalMarks").textContent = `${totalScore.toFixed(2)} / ${maxScore}`;
+      document.getElementById("scoreCorrectCount").textContent = correctCount;
+      document.getElementById("scoreWrongCount").textContent = wrongCount;
+      document.getElementById("scoreAccuracy").textContent = `${accuracy}%`;
+
+      const modal = document.getElementById("submitResultModal");
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+    }
+
+    // Export Response Sheet as CSV
+    function exportResponseCsv() {
+      const statusNames = ["Not Visited", "Not Answered", "Answered", "Marked for Review", "Answered & Marked"];
+      const fmt = (v) => (!v ? "" : (state.optionFormat === "alpha" ? ["A", "B", "C", "D"][Number(v) - 1] : v));
+      const rows = [["Question_No", "Status", "Selected_Option", "Correct_Key", "Result", "Marks"]];
+      let total = 0;
+      state.questions.forEach(q => {
+        const attempted = (q.status === STATUS_ANSWERED || q.status === STATUS_ANSWERED_REVIEW) && q.selectedOption;
+        let result = "Unattempted", marks = 0;
+        if (attempted && q.correctOption) {
+          if (q.selectedOption === q.correctOption) { result = "Correct"; marks = state.positiveMarks; }
+          else { result = "Wrong"; marks = -state.negativeMarks; }
+        } else if (attempted) { result = "No key"; }
+        total += marks;
+        rows.push([q.qNo, statusNames[q.status], fmt(q.selectedOption), fmt(q.correctOption), result, +marks.toFixed(4)]);
+      });
+      rows.push(["TOTAL", "", "", "", "", +total.toFixed(4)]);
+      const csvContent = rows.map(r => r.join(",")).join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${state.examTitle.toLowerCase().replace(/[^a-z0-9]+/g, "_")}_responses.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast("Downloaded response sheet CSV.");
+    }
+
+    // Wire up all DOM event listeners on load
+    window.addEventListener("DOMContentLoaded", () => {
+      initQuestionsArray(state.totalQuestions);
+      renderHeaderInfo();
+      goToWizardStep(1);
+
+      // Quick Fractional Negative Marking Preset Buttons (0, 1/4, 1/3, 1/2, 2/3, 1)
+      document.querySelectorAll(".neg-preset-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const val = btn.getAttribute("data-neg-preset");
+          document.getElementById("inputNegativeMarks").value = val;
+        });
+      });
+
+      // Step 1: Fetch Question Paper PDF (Upload Input, Drag-and-Drop, or Built-in Sample)
+      document.getElementById("pdfUploadInput").addEventListener("change", (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (file) {
+          loadPdfFile(file);
+          e.target.value = "";
+        }
+      });
+
+      const dropArea = document.getElementById("wizardPdfDropArea");
+      dropArea.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropArea.classList.add("border-blue-600", "bg-blue-100/60");
+      });
+      dropArea.addEventListener("dragleave", () => {
+        dropArea.classList.remove("border-blue-600", "bg-blue-100/60");
+      });
+      dropArea.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropArea.classList.remove("border-blue-600", "bg-blue-100/60");
+        const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (file && file.type === "application/pdf") {
+          loadPdfFile(file);
+        } else if (file) {
+          showToast("Please drop a valid .pdf Question Paper file.");
+        }
+      });
+
+      const useSampleHandler = () => {
+        if (state.questionImages) Object.values(state.questionImages).forEach(i => URL.revokeObjectURL(i.url));
+        state.questionImages = null;
+        state.parseInfo = null;
+        state.viewMode = "question";
+        state.questions = [];
+        initQuestionsArray(state.totalQuestions);
+        state.pdfMode = "sample";
+        state.pdfFileName = "UGC-NET Paper-I Sample PDF (Built-in)";
+        state.totalPages = 5;
+        state.currentPage = 1;
+        renderHeaderInfo();
+        showToast("Loaded built-in sample question paper. Step 2: Apply Test Settings.");
+        goToWizardStep(2);
+      };
+      document.getElementById("useSamplePaperStep1Btn").addEventListener("click", useSampleHandler);
+      document.getElementById("loadSamplePaperBtn").addEventListener("click", useSampleHandler);
+
+      // Step 2: Test Settings Form Submission -> Advances to Step 3 (Answer Key)
+      document.getElementById("backToStep1Btn").addEventListener("click", () => goToWizardStep(1));
+      document.getElementById("cancelSettingsBtn").addEventListener("click", () => goToWizardStep(1));
+      document.getElementById("closeSettingsModalBtn").addEventListener("click", () => goToWizardStep(1));
+      document.getElementById("openSettingsModalBtn").addEventListener("click", () => goToWizardStep(2));
+
+      document.getElementById("settingsForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        try {
+        state.candidateName = document.getElementById("inputCandidateName").value.trim() || "Your Name";
+        state.subjectName = document.getElementById("inputSubjectName").value.trim() || "Mock Practice";
+        state.examTitle = document.getElementById("inputExamTitle").value.trim() || "PAPER NAME";
+        const newTotal = Math.max(1, Math.min(300, parseInt(document.getElementById("inputTotalQuestions").value, 10) || state.totalQuestions || 100));
+        const newMins = Math.max(1, Math.min(300, parseInt(document.getElementById("inputDurationMinutes").value, 10) || 90));
+        state.totalQuestions = newTotal;
+        state.configuredDurationMinutes = newMins;
+        state.durationSeconds = newMins * 60;
+        state.optionFormat = document.getElementById("inputOptionFormat").value;
+
+        const posParsed = parseMarksExpression(document.getElementById("inputPositiveMarks").value, 2);
+        const negParsed = parseMarksExpression(document.getElementById("inputNegativeMarks").value, 0);
+        state.positiveMarks = posParsed.value;
+        state.positiveMarksLabel = posParsed.label;
+        state.negativeMarks = negParsed.value;
+        state.negativeMarksLabel = negParsed.label;
+
+        initQuestionsArray(state.totalQuestions);
+        renderHeaderInfo();
+        showToast(`Settings saved (+${state.positiveMarksLabel} / -${state.negativeMarksLabel})! Step 3: Answer Key.`);
+        goToWizardStep(3);
+        } catch (err) {
+          console.error(err);
+          showToast("Could not continue: " + (err && err.message ? err.message : err));
+        }
+      });
+
+      document.getElementById("resetAllResponsesBtn").addEventListener("click", () => {
+        state.questions = [];
+        initQuestionsArray(state.totalQuestions);
+        showToast("All question responses have been reset.");
+      });
+
+      // Step 3: Answer Key Upload & Setup -> Advances to Step 4 (Start Exam)
+      document.getElementById("backToStep2Btn").addEventListener("click", () => goToWizardStep(2));
+      document.getElementById("openAnswerKeyModalBtn").addEventListener("click", () => goToWizardStep(3));
+      document.getElementById("closeAnswerKeyModalBtn").addEventListener("click", () => goToWizardStep(4));
+
+      document.getElementById("answerKeyFileInput").addEventListener("change", (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (file) {
+          handleAnswerKeyFileUpload(file);
+          e.target.value = "";
+        }
+      });
+
+      document.getElementById("applyBulkAnswerKeyBtn").addEventListener("click", () => {
+        const raw = document.getElementById("bulkAnswerKeyInput").value.trim();
+        if (!raw) return;
+        parseAnswerKeyTextAndApply(raw, "Bulk Input");
+      });
+
+      document.getElementById("clearAnswerKeyBtn").addEventListener("click", () => {
+        state.questions.forEach(q => { q.correctOption = ""; });
+        populateAnswerKeyGrid();
+        showToast("Cleared all answer keys.");
+      });
+
+      const proceedToStep4 = () => {
+        showToast("Answer key saved! Step 4: Ready to start the examination.");
+        goToWizardStep(4);
+      };
+      document.getElementById("saveAnswerKeyBtn").addEventListener("click", proceedToStep4);
+      document.getElementById("proceedToStartExamBtn").addEventListener("click", proceedToStep4);
+
+      // Step 4: Start Examination Buttons
+      document.getElementById("backToAnswerKeyBtn").addEventListener("click", () => goToWizardStep(3));
+      document.getElementById("openStartExamModalBtn").addEventListener("click", () => goToWizardStep(4));
+      document.getElementById("closeStartExamModalBtn").addEventListener("click", () => goToWizardStep(3));
+      document.getElementById("toggleFullScreenBtn").addEventListener("click", enterFullScreen);
+      document.getElementById("startExamNowBtn").addEventListener("click", () => {
+        launchExamination();
+      });
+      document.getElementById("startDemoFiveMinBtn").addEventListener("click", () => {
+        launchExamination(305); // Starts at 00:05:05 so 5-min warning triggers in 5 seconds
+      });
+
+      // Radio selection immediate feedback during exam
+      document.querySelectorAll('input[name="ntaOption"]').forEach(radio => {
+        radio.addEventListener("change", (e) => {
+          const statusTextEl = document.getElementById("selectedOptionStatus");
+          const val = e.target.value;
+          const formattedQNo = String(state.currentQuestion).padStart(2, "0");
+          const labelText = state.optionFormat === "alpha"
+            ? ["A", "B", "C", "D"][Number(val) - 1]
+            : val;
+          statusTextEl.textContent = `Q.${formattedQNo}: Option (${labelText}) chosen — click SAVE & NEXT to confirm`;
+          statusTextEl.className = "font-semibold text-amber-700";
+        });
+      });
+
+      // NTA Main Action Buttons
+      document.getElementById("saveAndNextBtn").addEventListener("click", handleSaveAndNext);
+      document.getElementById("saveAndMarkReviewBtn").addEventListener("click", handleSaveAndMarkReview);
+      document.getElementById("clearResponseBtn").addEventListener("click", handleClearResponse);
+      document.getElementById("markReviewAndNextBtn").addEventListener("click", handleMarkReviewAndNext);
+
+      // Bottom << BACK and NEXT >> Question Buttons
+      document.getElementById("prevQuestionBtn").addEventListener("click", () => {
+        if (state.currentQuestion > 1) goToQuestion(state.currentQuestion - 1);
+      });
+      document.getElementById("nextQuestionBtn").addEventListener("click", () => {
+        if (state.currentQuestion < state.totalQuestions) goToQuestion(state.currentQuestion + 1);
+      });
+
+      // Hidden compatibility controls
+      document.getElementById("toggleTimerBtn").addEventListener("click", () => {
+        state.timerRunning = !state.timerRunning;
+        if (state.timerRunning) state.endTime = Date.now() + state.durationSeconds * 1000;
+      });
+      document.getElementById("paperLanguageSelect").addEventListener("change", (e) => {
+        showToast(`Language set to ${e.target.value}.`);
+      });
+      document.getElementById("dismissBannerBtn").addEventListener("click", () => {
+        document.getElementById("dropZoneBanner").classList.add("hidden");
+      });
+
+      // Toggle between the cropped question and the original PDF page
+      document.getElementById("toggleViewModeBtn").addEventListener("click", () => {
+        if (!state.questionImages) return;
+        if (state.viewMode === "question") {
+          const info = state.questionImages[state.currentQuestion];
+          state.currentPage = info ? info.page : state.currentPage;
+          state.viewMode = "page";
+        } else {
+          state.viewMode = "question";
+        }
+        renderPdfOrSampleView();
+      });
+
+      // Warn if the candidate leaves full screen during the exam
+      document.addEventListener("fullscreenchange", () => {
+        if (state.examStarted && !state.examSubmitted && !document.fullscreenElement) {
+          showToast("You left full screen mode.");
+        }
+      });
+
+      // Remember the optional AI endpoint
+      try {
+        document.getElementById("aiEndpointInput").value = localStorage.getItem("mockTestAiEndpoint") || "";
+        document.getElementById("aiEndpointInput").addEventListener("change", (e) => {
+          localStorage.setItem("mockTestAiEndpoint", e.target.value.trim());
+        });
+      } catch (err) { /* storage may be blocked */ }
+
+      // Collapse / Expand Right Palette
+      document.getElementById("togglePaletteBtn").addEventListener("click", () => {
+        state.paletteCollapsed = !state.paletteCollapsed;
+        const rightPane = document.getElementById("rightPalettePane");
+        const icon = document.getElementById("togglePaletteIcon");
+        if (state.paletteCollapsed) {
+          rightPane.classList.add("hidden");
+          icon.textContent = "<";
+        } else {
+          rightPane.classList.remove("hidden");
+          icon.textContent = ">";
+        }
+      });
+
+      // Palette Filter
+      document.getElementById("paletteFilterSelect").addEventListener("change", (e) => {
+        state.paletteFilter = e.target.value;
+        renderPaletteAndCounts();
+      });
+
+      // Dedicated PDF Page Navigation Buttons (Both Top Toolbar & Action Row)
+      document.getElementById("pdfPrevPageBtn").addEventListener("click", goToPrevPdfPage);
+      document.getElementById("pdfNextPageBtn").addEventListener("click", goToNextPdfPage);
+      document.getElementById("dedicatedPrevPageBtn").addEventListener("click", goToPrevPdfPage);
+      document.getElementById("dedicatedNextPageBtn").addEventListener("click", goToNextPdfPage);
+
+      document.getElementById("pdfPageInput").addEventListener("change", (e) => {
+        const val = parseInt(e.target.value, 10);
+        if (!isNaN(val)) {
+          state.currentPage = Math.max(1, Math.min(state.totalPages, val));
+          renderPdfOrSampleView();
+        }
+      });
+      document.getElementById("zoomInBtn").addEventListener("click", () => {
+        state.zoomScale = Math.min(2.25, +(state.zoomScale + 0.15).toFixed(2));
+        renderPdfOrSampleView();
+      });
+      document.getElementById("zoomOutBtn").addEventListener("click", () => {
+        state.zoomScale = Math.max(0.6, +(state.zoomScale - 0.15).toFixed(2));
+        renderPdfOrSampleView();
+      });
+      document.getElementById("fitWidthBtn").addEventListener("click", () => {
+        state.zoomScale = 1.0;
+        renderPdfOrSampleView();
+      });
+      document.getElementById("autoSyncPageCheckbox").addEventListener("change", (e) => {
+        state.autoSyncPage = e.target.checked;
+      });
+      document.getElementById("pinQuestionToPageBtn").addEventListener("click", () => {
+        const qObj = state.questions[state.currentQuestion - 1];
+        if (qObj) {
+          qObj.linkedPage = state.currentPage;
+          showToast(`Pinned Question ${String(state.currentQuestion).padStart(2, "0")} to PDF Page ${state.currentPage}.`);
+        }
+      });
+
+      // 5-Minute Warning Modal & Banner controls
+      const fiveMinModal = document.getElementById("fiveMinWarningModal");
+      const closeFiveMinModal = () => {
+        fiveMinModal.classList.add("hidden");
+        fiveMinModal.classList.remove("flex");
+      };
+      document.getElementById("closeFiveMinModalBtn").addEventListener("click", closeFiveMinModal);
+      document.getElementById("ackFiveMinWarningBtn").addEventListener("click", closeFiveMinModal);
+      document.getElementById("dismissFiveMinBannerBtn").addEventListener("click", () => {
+        const banner = document.getElementById("fiveMinWarningBanner");
+        banner.classList.add("hidden");
+        banner.classList.remove("flex");
+      });
+
+      // Mobile palette drawer
+      document.getElementById("openPaletteBtn").addEventListener("click", openPalette);
+      document.getElementById("closePaletteBtn").addEventListener("click", closePalette);
+      document.getElementById("paletteBackdrop").addEventListener("click", closePalette);
+
+      // Offline / installable (needs http(s); skipped when opened as a plain file)
+      if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
+        navigator.serviceWorker.register("sw.js").catch(() => {});
+      }
+
+      // Pause / Resume
+      document.getElementById("pauseTestBtn").addEventListener("click", () => setPaused(!state.paused));
+      document.getElementById("resumeFromPauseBtn").addEventListener("click", () => setPaused(false));
+
+      // Submit & Scorecard Modal
+      const submitModal = document.getElementById("submitResultModal");
+      document.getElementById("submitExamBtn").addEventListener("click", () => {
+        state.examSubmitted = true;
+        resetPauseUi();
+        openSubmitModal(false);
+      });
+      const closeSubmit = () => {
+        submitModal.classList.add("hidden");
+        submitModal.classList.remove("flex");
+      };
+      const returnToFirstPage = () => {
+        closeSubmit();
+        if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        state.examStarted = false;
+        state.examSubmitted = false;
+        state.timerRunning = false;
+        resetPauseUi();
+        state.fiveMinWarningShown = false;
+        const banner = document.getElementById("fiveMinWarningBanner");
+        banner.classList.add("hidden");
+        banner.classList.remove("flex");
+        const fiveModal = document.getElementById("fiveMinWarningModal");
+        fiveModal.classList.add("hidden");
+        fiveModal.classList.remove("flex");
+        try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
+        state.durationSeconds = state.configuredDurationMinutes * 60;
+        document.getElementById("examMainWorkspace").classList.add("hidden");
+        document.getElementById("examMainWorkspace").classList.remove("flex");
+        document.getElementById("preExamWizardScreen").classList.remove("hidden");
+        renderHeaderInfo();
+        goToWizardStep(1);
+      };
+      document.getElementById("closeSubmitModalBtn").addEventListener("click", returnToFirstPage);
+      document.getElementById("resumeTestBtn").addEventListener("click", () => {
+        if (state.durationSeconds > 0) {
+          state.examSubmitted = false;
+          state.timerRunning = true;
+          state.endTime = Date.now() + state.durationSeconds * 1000;
+          document.getElementById("pauseTestBtn").classList.remove("hidden");
+          document.getElementById("pauseTestBtn").classList.add("flex");
+          keepAwake(true);
+          renderHeaderInfo();
+          renderCurrentQuestionState();
+        }
+        closeSubmit();
+      });
+      document.getElementById("editKeyFromResultBtn").addEventListener("click", () => {
+        closeSubmit();
+        document.getElementById("examMainWorkspace").classList.add("hidden");
+        document.getElementById("examMainWorkspace").classList.remove("flex");
+        document.getElementById("preExamWizardScreen").classList.remove("hidden");
+        goToWizardStep(3);
+      });
+      document.getElementById("exportCsvBtn").addEventListener("click", exportResponseCsv);
+      document.getElementById("startFreshTestBtn").addEventListener("click", () => {
+        closeSubmit();
+        state.examStarted = false;
+        state.examSubmitted = false;
+        state.timerRunning = false;
+        resetPauseUi();
+        document.getElementById("examMainWorkspace").classList.add("hidden");
+        document.getElementById("examMainWorkspace").classList.remove("flex");
+        document.getElementById("preExamWizardScreen").classList.remove("hidden");
+        goToWizardStep(1);
+        showToast("Returned to Step 1: Upload a Question Paper PDF to start a new test.");
+      });
+    });
+  </script>
+</body>
+</html>
